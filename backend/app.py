@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+import places
 import terrain
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -26,6 +27,24 @@ def elevation(lat: float, lon: float):
         return {"lat": lat, "lon": lon, "elev_m": round(z, 1), "source": src}
     except FileNotFoundError as e:
         raise HTTPException(503, str(e))
+
+
+@app.get("/api/places")
+def places_search(q: str, limit: int = 8):
+    """Search IAU-named Mars features (craters, mountains, valleys...)."""
+    return places.search(q, min(limit, 20))
+
+
+@app.get("/api/whereis")
+def whereis(lat: float, lon: float):
+    """Describe a position: containing/nearest named feature, plus its elevation."""
+    out = places.whereis(lat, lon)
+    try:
+        z, src = terrain.elevation_src(lat, lon)
+        out.update(elev_m=round(z, 1), elev_source=src)
+    except FileNotFoundError:
+        pass
+    return out
 
 
 @app.get("/api/dem")

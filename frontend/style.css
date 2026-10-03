@@ -108,3 +108,30 @@ input[type=time] { font: inherit; color: var(--text); background: var(--panel); 
   background: #fff; color: #111; padding: 8px 14px; border-radius: 20px; font-size: 13px; font-weight: 500;
   box-shadow: 0 2px 10px rgba(0,0,0,.5); pointer-events: none; }
 #map { position: relative; }
+
+/* ---------- your position ---------- */
+.search { position: relative; }
+.search input { width: 100%; font: inherit; color: var(--text); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 20px; padding: 8px 14px; }
+.search input:focus { outline: none; border-color: var(--route); }
+.results { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 2000; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+.result { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid var(--line); }
+.result:last-child { border-bottom: 0; }
+.result:hover, .result.sel { background: #221c19; }
+.result .rn { font-weight: 500; }
+.result .rm { font-size: 12px; color: var(--muted); }
+button:disabled { opacity: .45; cursor: default; border-color: var(--line); }
+.me-card { margin-top: 10px; }
+.me-card.set { color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.me-card .where { font-weight: 500; margin-bottom: 2px; }
+
+.me-dot { width: 18px; height: 18px; border-radius: 50%; background: var(--route); border: 3px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.5); position: relative; }
+.me-dot::after { content: ""; position: absolute; inset: -12px; border-radius: 50%;
+  background: rgba(79,140,255,.25); animation: me-pulse 2s ease-out infinite; z-index: -1; }
+@keyframes me-pulse { from { transform: scale(.4); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
+.place-pop { min-width: 190px; }
+.place-pop .pn { font-weight: 600; font-size: 14px; }
+.place-pop .pm { color: var(--muted); font-size: 12px; margin: 2px 0 8px; }
+.place-pop button { margin: 2px 4px 0 0; padding: 5px 8px; font-size: 12px; }

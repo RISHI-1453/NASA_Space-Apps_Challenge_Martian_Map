@@ -21,6 +21,22 @@
 
     <aside id="panel">
       <section>
+        <h2>Your position</h2>
+        <div class="search">
+          <input id="place-q" type="search" autocomplete="off"
+                 placeholder="Search a place (e.g. Gale) or coordinates (18.44, 77.45)">
+          <div id="place-results" class="results" hidden></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button id="pick-me">📍 Pick on map</button>
+          <button id="start-here" disabled>▶ Start route here</button>
+          <button id="center-me" disabled title="Center map on your position">◎</button>
+        </div>
+        <div id="me-card" class="me-card muted small">No position set. Mars has no GPS — search a place,
+          type coordinates from your lander/rover nav fix, or pick a spot on the map.</div>
+      </section>
+
+      <section>
         <h2>Sites</h2>
         <select id="site-select"><option value="">Fly to a site…</option></select>
         <div class="legend">

@@ -35,6 +35,13 @@ python -m venv .venv
 - CTX Jezero DTM, 20 m/px. This is the USGS Mars 2020 landing-navigation product, with coverage shown as a green dashed box on the map.
 - MGS MOLA MEGDR, about 3.7 km/px, everywhere else.
 
+**Your position (no GPS on Mars):**
+- **Search:** 2,052 official IAU place names (craters, mountains, valleys…). Choosing one flies the map there and opens a place card.
+- **Coordinates:** type them from the lander/rover navigation fix, e.g. `18.4447, 77.4508`, `4.59S 137.44E`, or 0–360°E.
+- **Pick on map:** click to drop the blue pulsing "You are here" dot. Right-click anywhere for a dropped pin.
+- **Place cards:** 📍 *I'm here* · 🧭 *Directions from me* · ➕ *Add as stop*.
+- **Description:** your position is described in plain words (e.g. "Inside Jezero (crater, 48 km across), in Nili Fossae"), with its elevation and terrain source. *Start route here* begins a Marswalk from that spot. The position is remembered between visits.
+
 **Marswalk planner (Google-Maps style):**
 - **Stops:** lettered pins A, B, C… that you can drag. The route has a dark outline, and each leg is labelled with its distance and time.
 - **Slope colouring:** the route turns amber over 8° and red over 15°, with a red dot at each hazard point.
@@ -62,11 +69,13 @@ python -m venv .venv
 ## Structure
 
 ```
-backend/app.py       FastAPI: /api/sites, /api/elevation, /api/profile (+ serves frontend)
+backend/app.py       FastAPI: /api/sites, /api/places, /api/whereis, /api/elevation, /api/dem, /api/profile
+backend/places.py    IAU place-name search + "where am I" descriptions
 backend/terrain.py   DEM sampling (local DTMs -> MOLA), great-circle densify, legs/directions, slope/EVA model
 frontend/            Leaflet (EPSG:4326 + Trek tiles), Chart.js profile, Mars clock
 data/                sites.json, MOLA grid + Jezero DTM (downloaded, git-ignored)
-scripts/fetch_data.py  downloads the elevation data
+scripts/fetch_data.py      downloads the elevation data
+scripts/build_features.py  rebuilds data/mars_features.json from the USGS gazetteer
 ```
 
 Known limitation: Leaflet's scale bar assumes Earth's radius. Distances in the panel use the Mars radius (3389.5 km) and are correct.

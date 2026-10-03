@@ -73,7 +73,7 @@ fetch("/api/sites").then((r) => r.json()).then(({ sites }) => {
     map.flyTo([+o.dataset.lat, +o.dataset.lon], 8);
     updateConditions(+o.dataset.lat, +o.dataset.lon, o.textContent.slice(2));
   };
-  updateConditions(18.4447, 77.4508, "Perseverance - Octavia E. Butler Landing");
+  if (!me) updateConditions(18.4447, 77.4508, "Perseverance - Octavia E. Butler Landing");
 });
 
 // ---------- cursor readout ----------
@@ -155,7 +155,11 @@ $("clear").onclick = () => { waypoints = []; setDrawing(false); redrawRoute(); }
 $("export").onclick = exportGeoJSON;
 $("roundtrip").onchange = () => redrawRoute();
 $("depart").oninput = () => lastProfile && renderPanel(lastProfile, lastLabels);
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && drawing) setDrawing(false); });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (drawing) setDrawing(false);
+  if (picking) $("pick-me").click();
+});
 map.on("click", (e) => {
   if (!drawing) return;
   waypoints.push([e.latlng.lat, e.latlng.lng]);
@@ -427,6 +431,158 @@ function exportGeoJSON() {
   a.download = "marswalk_route.geojson";
   a.click();
 }
+
+// ---------- your position ----------
+// Mars has no GPS: the astronaut's position comes from a place name, coordinates from the
+// lander/rover navigation fix, or a spot picked on the map.
+let me = null, picking = false;
+const meLayer = L.layerGroup().addTo(map);
+const searchLayer = L.layerGroup().addTo(map);
+const ME_KEY = "martianmap.me";
+
+function parseCoords(s) {
+  const m = s.trim().match(/^(-?\d+(?:\.\d+)?)\s*°?\s*([NS])?[\s,;]+(-?\d+(?:\.\d+)?)\s*°?\s*([EW])?$/i);
+  if (!m) return null;
+  let lat = +m[1], lon = +m[3];
+  if (m[2] && m[2].toUpperCase() === "S") lat = -Math.abs(lat);
+  if (m[4] && m[4].toUpperCase() === "W") lon = -Math.abs(lon);
+  if (lon > 180) lon -= 360; // accept 0–360°E
+  if (Math.abs(lat) > 90 || lon < -180 || lon > 180) return null;
+  return [lat, lon];
+}
+const fmtLatLon = (lat, lon) => `${Math.abs(lat).toFixed(4)}°${lat >= 0 ? "N" : "S"}, ${Math.abs(lon).toFixed(4)}°${lon >= 0 ? "E" : "W"}`;
+// zoom so a feature of this size fills roughly the map view
+const zoomFor = (km) => Math.max(3, Math.min(14, Math.round(Math.log2(351.6 / (Math.max(km, 3) / 59.16)))));
+
+async function whereis(lat, lon) {
+  try { const r = await fetch(`/api/whereis?lat=${lat}&lon=${lon}`); return r.ok ? r.json() : null; } catch { return null; }
+}
+
+// ----- set / show my position -----
+async function setMe(lat, lon, { fly = true, save = true } = {}) {
+  me = [lat, lon];
+  meLayer.clearLayers();
+  L.marker(me, { icon: L.divIcon({ className: "", html: '<div class="me-dot"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), zIndexOffset: 2000, keyboard: false })
+    .bindTooltip("You are here", { direction: "top", offset: [0, -10] }).addTo(meLayer);
+  $("start-here").disabled = $("center-me").disabled = false;
+  if (fly) map.flyTo(me, Math.max(map.getZoom(), 12));
+  if (save) { try { localStorage.setItem(ME_KEY, JSON.stringify(me)); } catch {} }
+  $("me-card").className = "me-card set";
+  $("me-card").innerHTML = `<div class="where">Locating…</div><div class="muted">${fmtLatLon(lat, lon)}</div>`;
+  updateConditions(lat, lon, "Your position");
+  const w = await whereis(lat, lon);
+  if (!w || me[0] !== lat || me[1] !== lon) return;
+  $("me-card").innerHTML = `<div class="where">${w.summary}</div>
+    <div class="muted">${fmtLatLon(lat, lon)}${w.elev_m !== undefined ? ` · ${Math.round(w.elev_m)} m` : ""}</div>
+    ${w.elev_source ? `<div class="muted">Terrain data: ${w.elev_source}</div>` : ""}`;
+}
+
+$("pick-me").onclick = () => {
+  picking = !picking;
+  if (picking && drawing) setDrawing(false);
+  $("pick-me").classList.toggle("active", picking);
+  map.getContainer().style.cursor = picking ? "crosshair" : "";
+  banner.hidden = !picking;
+  banner.textContent = "Click the map where you are";
+};
+map.on("click", (e) => {
+  if (!picking) return;
+  picking = false;
+  $("pick-me").classList.remove("active");
+  map.getContainer().style.cursor = "";
+  banner.hidden = true;
+  setMe(e.latlng.lat, e.latlng.lng, { fly: false });
+});
+$("center-me").onclick = () => me && map.flyTo(me, Math.max(map.getZoom(), 12));
+$("start-here").onclick = () => {
+  if (!me) return;
+  waypoints = [[...me]];
+  redrawRoute();
+  setDrawing(true); // next clicks add B, C…
+};
+
+function routeFromMe(lat, lon) {
+  if (!me) return;
+  waypoints = [[...me], [lat, lon]];
+  setDrawing(false);
+  redrawRoute();
+  map.fitBounds(L.latLngBounds(waypoints).pad(0.3), { maxZoom: 15 });
+}
+
+// ----- place card (search result, typed coordinates, or right-click) -----
+async function showPlace(lat, lon, title, meta, zoom) {
+  searchLayer.clearLayers();
+  const pin = L.marker([lat, lon], { icon: pinIcon("", "end"), zIndexOffset: 1500 }).addTo(searchLayer);
+  const box = document.createElement("div");
+  box.className = "place-pop";
+  box.innerHTML = `<div class="pn">${title}</div><div class="pm">${meta || ""}${meta ? "<br>" : ""}${fmtLatLon(lat, lon)}<span class="pw"></span></div>`;
+  const btn = (label, fn) => { const b = document.createElement("button"); b.textContent = label; b.onclick = () => { map.closePopup(); fn(); }; box.appendChild(b); };
+  btn("📍 I'm here", () => { searchLayer.clearLayers(); setMe(lat, lon, { fly: false }); });
+  if (me) btn("🧭 Directions from me", () => { searchLayer.clearLayers(); routeFromMe(lat, lon); });
+  btn("➕ Add as stop", () => { waypoints.push([lat, lon]); redrawRoute(); });
+  pin.bindPopup(box, { className: "", maxWidth: 260 });
+  if (zoom !== undefined) map.flyTo([lat, lon], zoom);
+  pin.openPopup();
+  const w = await whereis(lat, lon);
+  const el = box.querySelector(".pw");
+  if (w && el) el.innerHTML = `<br>${w.summary}${w.elev_m !== undefined ? ` · ${Math.round(w.elev_m)} m` : ""}`;
+}
+map.on("contextmenu", (e) => showPlace(e.latlng.lat, e.latlng.lng, "Dropped pin", ""));
+
+// ----- search box -----
+let searchTimer, results = [], sel = -1;
+const resultsEl = $("place-results");
+function renderResults() {
+  resultsEl.innerHTML = "";
+  resultsEl.hidden = !results.length;
+  results.forEach((r, i) => {
+    const d = document.createElement("div");
+    d.className = "result" + (i === sel ? " sel" : "");
+    d.innerHTML = `<div class="rn">${r.label}</div><div class="rm">${r.meta}</div>`;
+    d.onmousedown = (ev) => { ev.preventDefault(); choose(r); };
+    resultsEl.appendChild(d);
+  });
+}
+function choose(r) {
+  results = []; renderResults();
+  $("place-q").value = r.label.startsWith("Go to ") ? r.label.slice(6) : r.label;
+  $("place-q").blur();
+  showPlace(r.lat, r.lon, r.label.startsWith("Go to ") ? "Coordinates" : r.label, r.card, r.zoom);
+}
+$("place-q").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  const q = $("place-q").value;
+  const c = parseCoords(q);
+  if (c) {
+    results = [{ label: `Go to ${fmtLatLon(...c)}`, meta: "Coordinates (planetocentric, east-positive)", card: "", lat: c[0], lon: c[1], zoom: 12 }];
+    sel = 0; return renderResults();
+  }
+  if (q.trim().length < 2) { results = []; return renderResults(); }
+  searchTimer = setTimeout(async () => {
+    const r = await fetch(`/api/places?q=${encodeURIComponent(q)}`);
+    if (!r.ok || $("place-q").value !== q) return;
+    results = (await r.json()).map((f) => ({
+      label: f.name, lat: f.lat, lon: f.lon, zoom: zoomFor(f.diameter_km),
+      card: `${f.kind[0].toUpperCase() + f.kind.slice(1)}${f.diameter_km ? ` · ${f.diameter_km.toFixed(0)} km across` : ""}`,
+      meta: `${f.kind[0].toUpperCase() + f.kind.slice(1)}${f.diameter_km ? ` · ${f.diameter_km.toFixed(0)} km` : ""} · ${fmtLatLon(f.lat, f.lon)}`,
+    }));
+    sel = results.length ? 0 : -1;
+    renderResults();
+  }, 150);
+});
+$("place-q").addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown") { sel = Math.min(results.length - 1, sel + 1); renderResults(); e.preventDefault(); }
+  else if (e.key === "ArrowUp") { sel = Math.max(0, sel - 1); renderResults(); e.preventDefault(); }
+  else if (e.key === "Enter" && results[sel]) { choose(results[sel]); e.preventDefault(); }
+  else if (e.key === "Escape") { results = []; renderResults(); }
+});
+$("place-q").addEventListener("blur", () => setTimeout(() => { results = []; renderResults(); }, 100));
+
+// restore last position
+try {
+  const saved = JSON.parse(localStorage.getItem(ME_KEY) || "null");
+  if (Array.isArray(saved) && saved.length === 2) setMe(saved[0], saved[1], { fly: false, save: false });
+} catch {}
 
 // ---------- Mars clock & conditions ----------
 let condTarget = null;
