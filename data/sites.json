@@ -1,0 +1,21 @@
+{
+  "note": "Lat planetocentric, lon east (-180..180). Lander coordinates from mission reports; candidate human exploration zones are approximate centres.",
+  "sites": [
+    {"id": "perseverance", "name": "Perseverance - Octavia E. Butler Landing", "type": "lander", "mission": "Mars 2020", "year": 2021, "lat": 18.4447, "lon": 77.4508, "region": "Jezero Crater"},
+    {"id": "curiosity", "name": "Curiosity - Bradbury Landing", "type": "lander", "mission": "MSL", "year": 2012, "lat": -4.5895, "lon": 137.4417, "region": "Gale Crater"},
+    {"id": "insight", "name": "InSight", "type": "lander", "mission": "InSight", "year": 2018, "lat": 4.5024, "lon": 135.6234, "region": "Elysium Planitia"},
+    {"id": "zhurong", "name": "Zhurong", "type": "lander", "mission": "Tianwen-1", "year": 2021, "lat": 25.066, "lon": 109.925, "region": "Utopia Planitia"},
+    {"id": "opportunity", "name": "Opportunity - Eagle Crater", "type": "lander", "mission": "MER-B", "year": 2004, "lat": -1.9462, "lon": -5.5266, "region": "Meridiani Planum"},
+    {"id": "spirit", "name": "Spirit - Columbia Memorial Station", "type": "lander", "mission": "MER-A", "year": 2004, "lat": -14.5684, "lon": 175.472, "region": "Gusev Crater"},
+    {"id": "phoenix", "name": "Phoenix", "type": "lander", "mission": "Phoenix", "year": 2008, "lat": 68.2188, "lon": -125.7492, "region": "Vastitas Borealis"},
+    {"id": "pathfinder", "name": "Mars Pathfinder - Sagan Memorial Station", "type": "lander", "mission": "Pathfinder", "year": 1997, "lat": 19.13, "lon": -33.22, "region": "Ares Vallis"},
+    {"id": "viking1", "name": "Viking 1", "type": "lander", "mission": "Viking", "year": 1976, "lat": 22.27, "lon": -47.95, "region": "Chryse Planitia"},
+    {"id": "viking2", "name": "Viking 2", "type": "lander", "mission": "Viking", "year": 1976, "lat": 47.64, "lon": 134.29, "region": "Utopia Planitia"},
+
+    {"id": "ez-arcadia", "name": "Arcadia Planitia", "type": "candidate", "lat": 46.0, "lon": -163.0, "region": "Northern plains", "why": "Shallow buried water ice; flat, safe terrain"},
+    {"id": "ez-deuteronilus", "name": "Deuteronilus Mensae", "type": "candidate", "lat": 43.9, "lon": 23.5, "region": "Dichotomy boundary", "why": "Debris-covered glaciers (ice resource) and layered mesas"},
+    {"id": "ez-mawrth", "name": "Mawrth Vallis", "type": "candidate", "lat": 24.0, "lon": -19.0, "region": "Arabia Terra margin", "why": "Clay-rich layered deposits from an ancient wet era"},
+    {"id": "ez-jezero", "name": "Jezero Crater delta", "type": "candidate", "lat": 18.5, "lon": 77.4, "region": "Isidis rim", "why": "Ancient lake delta; Perseverance sample caches nearby"},
+    {"id": "ez-melas", "name": "Melas Chasma", "type": "candidate", "lat": -10.0, "lon": -73.0, "region": "Valles Marineris", "why": "Exposed kilometre-scale stratigraphy; hydrated minerals"}
+  ]
+}

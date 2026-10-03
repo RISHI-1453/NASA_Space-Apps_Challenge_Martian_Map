@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Martian Map · Code Huzzlers</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <div class="brand">MARTIAN <span>MAP</span></div>
+    <div id="clock" class="clock"></div>
+  </header>
+
+  <main>
+    <div id="map"></div>
+
+    <aside id="panel">
+      <section>
+        <h2>Sites</h2>
+        <select id="site-select"><option value="">Fly to a site…</option></select>
+        <div class="legend">
+          <span><i class="dot lander"></i>Landers &amp; rovers</span>
+          <span><i class="dot candidate"></i>Candidate human sites</span>
+        </div>
+      </section>
+
+      <section>
+        <h2>Marswalk planner</h2>
+        <div class="row">
+          <button id="draw">✚ Add stops</button>
+          <button id="undo">Undo</button>
+          <button id="clear">Clear</button>
+          <button id="export">Export</button>
+        </div>
+        <div class="row options">
+          <label>Depart <input id="depart" type="time" value="09:00"> <span class="muted">local solar time</span></label>
+          <label><input id="roundtrip" type="checkbox" checked> Return to start</label>
+        </div>
+
+        <ol id="howto" class="howto">
+          <li>Click <b>✚ Add stops</b>.</li>
+          <li>Click the map to drop stops <b>A</b>, <b>B</b>, <b>C</b>… in walking order.</li>
+          <li>Drag any pin to adjust. Directions appear below.</li>
+        </ol>
+
+        <div id="summary" class="summary" hidden></div>
+        <div id="directions" class="directions"></div>
+
+        <div id="profile-wrap" hidden>
+          <h3>Elevation profile</h3>
+          <canvas id="profile" height="170"></canvas>
+          <p class="muted small" id="dem-note"></p>
+        </div>
+      </section>
+
+      <section>
+        <h2>Conditions at destination</h2>
+        <div id="conditions" class="stats"></div>
+        <p class="muted small">Sun and local time are computed (Mars24 algorithm). Weather, dust and
+          radiation layers plug in from mission datasets — see README.</p>
+      </section>
+    </aside>
+  </main>
+
+  <div id="readout" class="readout"></div>
+  <script src="marstime.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
