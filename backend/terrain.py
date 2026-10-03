@@ -228,10 +228,11 @@ def profile(waypoints: list[tuple[float, float]], step_m: float = 250) -> dict:
 
     sources: dict[str, int] = {}
 
-    def add_sample(p, z, slope_deg, leg, src):
+    def add_sample(p, z, slope_deg, leg, src, t_h=0.0):
         sources[src] = sources.get(src, 0) + 1
-        samples.append({"dist_m": round(dist, 1), "lat": round(p[0], 5), "lon": round(p[1], 5),
-                        "elev_m": round(z, 1), "slope_deg": round(slope_deg, 2), "leg": leg, "src": src})
+        samples.append({"dist_m": round(dist, 1), "lat": round(p[0], 6), "lon": round(p[1], 6),
+                        "elev_m": round(z, 1), "slope_deg": round(slope_deg, 2), "leg": leg, "src": src,
+                        "t_h": round(t_h, 4)})  # cumulative walking hours to reach this point
 
     # keep the sample count sane on very long routes
     total = sum(haversine_m(a, b) for a, b in zip(waypoints, waypoints[1:]))
@@ -265,7 +266,7 @@ def profile(waypoints: list[tuple[float, float]], step_m: float = 250) -> dict:
                 leg_hazards += 1
                 hazards.append({"dist_m": round(dist), "lat": p[0], "lon": p[1],
                                 "slope_deg": round(slope_deg, 1), "leg": li})
-            add_sample(p, z, slope_deg, li, src)
+            add_sample(p, z, slope_deg, li, src, hours + leg_hours)
             prev_pt, prev_z = p, z
         hours += leg_hours
 

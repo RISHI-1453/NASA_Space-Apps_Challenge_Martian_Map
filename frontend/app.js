@@ -284,7 +284,9 @@ function renderPanel(p, labels) {
       <div class="o2-bar"><div class="used" style="width:${usedPct}%;background:${s.walk_hours > s.o2_usable_hours ? RED : ROUTE}"></div><div class="reserve" style="width:${(reserve / s.o2_budget_hours) * 100}%"></div></div>
       <div class="o2-legend"><span>O₂ used ${s.walk_hours.toFixed(1)} h</span><span>usable ${s.o2_usable_hours} h · reserve ${reserve.toFixed(1)} h</span></div>
     </div>
-    <div class="verdict ${cls}">${verdict}</div>`;
+    <div class="verdict ${cls}">${verdict}</div>
+    <button id="nav-start" class="go">▶ Start Marswalk — live guidance</button>`;
+  $("nav-start").onclick = () => Nav.start();
 
   // turn-by-turn
   const el = $("directions");
@@ -461,6 +463,7 @@ async function whereis(lat, lon) {
 // ----- set / show my position -----
 async function setMe(lat, lon, { fly = true, save = true } = {}) {
   me = [lat, lon];
+  if (typeof Nav !== "undefined" && Nav.active) Nav.fix(lat, lon); // a new nav fix during a Marswalk
   meLayer.clearLayers();
   L.marker(me, { icon: L.divIcon({ className: "", html: '<div class="me-dot"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), zIndexOffset: 2000, keyboard: false })
     .bindTooltip("You are here", { direction: "top", offset: [0, -10] }).addTo(meLayer);
@@ -578,11 +581,6 @@ $("place-q").addEventListener("keydown", (e) => {
 });
 $("place-q").addEventListener("blur", () => setTimeout(() => { results = []; renderResults(); }, 100));
 
-// restore last position
-try {
-  const saved = JSON.parse(localStorage.getItem(ME_KEY) || "null");
-  if (Array.isArray(saved) && saved.length === 2) setMe(saved[0], saved[1], { fly: false, save: false });
-} catch {}
 
 // ---------- Mars clock & conditions ----------
 let condTarget = null;
@@ -616,3 +614,9 @@ function renderConditions() {
 }
 setInterval(renderConditions, 30000);
 renderConditions();
+
+// restore last position (runs last: setMe needs the conditions panel above)
+try {
+  const saved = JSON.parse(localStorage.getItem(ME_KEY) || "null");
+  if (Array.isArray(saved) && saved.length === 2) setMe(saved[0], saved[1], { fly: false, save: false });
+} catch {}

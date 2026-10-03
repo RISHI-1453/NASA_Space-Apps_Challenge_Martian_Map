@@ -53,6 +53,14 @@ python -m venv .venv
 - **Click a step:** zooms to and highlights that leg.
 - **Export:** GeoJSON of the route, stops, stats and directions.
 
+**Live Marswalk guidance (▶ Start Marswalk):** answers "am I on the right path?" while walking.
+- **Position input:** Mars has no GPS, so position comes from the suit or rover **nav fix**. Tap the map, or use *Your position → I'm here*. **Simulate walk** plays the route at 10–900× for demos, with an optional *Drift off route*.
+- **Snapping to the route:** each fix is matched to the nearest point on the planned route. It never jumps more than 100 m backwards, so an out-and-back route can't snap onto the return leg too early.
+- **Next-turn card (green):** distance to the next stop and what to do there, e.g. "898 m · At C: turn left west-northwest".
+- **Off route (red card):** appears beyond 40 m from the path, with the compass heading back to it and a dashed line to the nearest point on the route.
+- **Alerts:** **TURN BACK** when the walking left exceeds the O₂ left before reserve, wrong way, a steep slope within 300 m, finishing after sunset, and falling behind plan.
+- **Bottom bar:** ETA (local solar time), distance to go, walking time left, O₂ left and EVA time. Arrival messages appear at each stop. The walked part of the route turns grey and your trail is drawn. Optional 🔊 voice guidance.
+
 **Mars clock:** Mars Sol Date, MTC, Ls (season), Mars Year; local true solar time, sun elevation and daylight window at the destination, using the Mars24 algorithm (`frontend/marstime.js`).
 
 ## Layers to add once challenge resources are live
@@ -73,6 +81,7 @@ backend/app.py       FastAPI: /api/sites, /api/places, /api/whereis, /api/elevat
 backend/places.py    IAU place-name search + "where am I" descriptions
 backend/terrain.py   DEM sampling (local DTMs -> MOLA), great-circle densify, legs/directions, slope/EVA model
 frontend/            Leaflet (EPSG:4326 + Trek tiles), Chart.js profile, Mars clock
+frontend/navigate.js live guidance: route snapping, off-route, next turn, O2/turn-back, simulation
 data/                sites.json, MOLA grid + Jezero DTM (downloaded, git-ignored)
 scripts/fetch_data.py      downloads the elevation data
 scripts/build_features.py  rebuilds data/mars_features.json from the USGS gazetteer
