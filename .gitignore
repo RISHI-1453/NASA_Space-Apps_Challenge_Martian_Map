@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+data/*.img
+data/*.tif
+data/*.part
