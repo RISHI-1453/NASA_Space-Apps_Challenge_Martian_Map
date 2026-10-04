@@ -19,6 +19,14 @@ python -m venv .venv
 .venv\Scripts\python scripts\fetch_data.py
 ```
 
+## Intro (for presenting)
+
+The app opens with a ~30-second 3D journey, built with Three.js: **Milky Way → the Sun → the solar system today → Earth → Mars → Jezero crater**. It then hands over to the map, which keeps descending into the Jezero delta.
+- **Real positions:** planets sit where they are *today*, using JPL approximate Keplerian elements. The Earth–Mars distance and radio delay in the captions are computed live and checked against JPL Horizons: 1.6446 vs 1.6447 AU on 4 Oct 2026.
+- **Real imagery:** NASA Blue Marble on Earth and the Viking MDIM 2.1 mosaic on Mars, with a sharper ~1 km/px patch around Jezero for the final descent (`scripts/build_textures.py`).
+- **Controls:** **Space** pause/play · **← / →** previous/next chapter · **Esc** or **Enter** skip to the map. Clicking a chapter on the timeline jumps to it. **Watch intro** in the header replays it.
+- **Skipping:** add `#nointro` to the URL (or `?intro=0`) to open straight on the map. Users with *reduced motion* switched on skip it automatically.
+
 ## What works now
 
 **Map layers (all NASA Mars Trek WMTS):**
@@ -81,10 +89,12 @@ backend/app.py       FastAPI: /api/sites, /api/places, /api/whereis, /api/elevat
 backend/places.py    IAU place-name search + "where am I" descriptions
 backend/terrain.py   DEM sampling (local DTMs -> MOLA), great-circle densify, legs/directions, slope/EVA model
 frontend/            Leaflet (EPSG:4326 + Trek tiles), Chart.js profile, Mars clock
+frontend/intro.js    3D opener (galaxy → solar system → Jezero); textures in frontend/textures/
 frontend/navigate.js live guidance: route snapping, off-route, next turn, O2/turn-back, simulation
 data/                sites.json, MOLA grid + Jezero DTM (downloaded, git-ignored)
 scripts/fetch_data.py      downloads the elevation data
 scripts/build_features.py  rebuilds data/mars_features.json from the USGS gazetteer
+scripts/build_textures.py  rebuilds the intro's Earth/Mars globe textures (needs Pillow)
 ```
 
 Known limitation: Leaflet's scale bar assumes Earth's radius. Distances in the panel use the Mars radius (3389.5 km) and are correct.

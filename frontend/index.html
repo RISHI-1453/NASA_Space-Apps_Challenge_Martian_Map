@@ -4,16 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Martian Map · Code Huzzlers</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:ital,opsz,wght@0,9..144,300;1,9..144,300&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="intro.css">
+  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
   <header>
     <div class="brand">MARTIAN <span>MAP</span></div>
-    <div id="clock" class="clock"></div>
+    <div class="header-right">
+      <div id="clock" class="clock"></div>
+      <button id="replay-intro" class="intro-replay" type="button">Watch intro</button>
+    </div>
   </header>
 
   <main>
@@ -87,5 +92,21 @@
   <script src="marstime.js"></script>
   <script src="app.js"></script>
   <script src="navigate.js"></script>
+  <script type="module">
+    import { playIntro } from "./intro.js";
+    const JEZERO = [18.4447, 77.4508];
+    function startIntro() {
+      // the intro ends ~7° above Jezero, which matches map zoom 7; the map then keeps descending
+      map.setView(JEZERO, 7, { animate: false });
+      window.intro = playIntro({ onDone: () => { // handle kept for testing / presenter remote
+        map.invalidateSize();
+        map.flyTo(JEZERO, 11, { duration: 2.6 });
+      } });
+    }
+    const skip = /nointro/.test(location.hash) || new URLSearchParams(location.search).get("intro") === "0"
+      || matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!skip) startIntro();
+    document.getElementById("replay-intro").onclick = startIntro;
+  </script>
 </body>
 </html>

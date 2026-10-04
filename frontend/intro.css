@@ -1,0 +1,71 @@
+/* Intro: one cinematic moment, everything else quiet.
+   Space is true black; colour only identifies things (Earth blue, Mars rust). */
+#intro {
+  --space: #000;
+  --star: #eef0f6;
+  --dim: #a9afba;
+  --earth: #8fbaff;
+  --mars: #e0713e;       /* label text; orbit line uses deeper #c1440e */
+  position: fixed; inset: 0; z-index: 5000; background: var(--space); overflow: hidden;
+  font-family: Inter, system-ui, sans-serif; color: var(--star);
+  transition: opacity .9s ease;
+}
+#intro.gone { opacity: 0; pointer-events: none; }
+.intro-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.intro-flash { position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle at 50% 50%, #fffaf0 0%, #ffe2a8 35%, rgba(255, 196, 107, .85) 60%, #000 100%); }
+
+/* labels pinned to things in the scene */
+.intro-labels { position: absolute; inset: 0; pointer-events: none; }
+.intro-label { position: absolute; left: 0; top: 0; white-space: nowrap; font-size: 13px; letter-spacing: .02em;
+  color: rgba(238, 240, 246, .78); opacity: 0; transition: opacity .5s ease; text-shadow: 0 1px 3px #000; }
+.intro-label.earth { color: var(--earth); font-weight: 600; }
+.intro-label.mars { color: var(--mars); font-weight: 600; }
+.intro-label.faint { color: rgba(238, 240, 246, .45); font-style: italic; }
+.intro-label.dist { font-family: Fraunces, Georgia, serif; font-size: 18px; font-style: italic; color: var(--star); }
+.intro-label.here { color: var(--star); font-weight: 500; }
+.intro-label.here::after { /* reticle on the point itself, below the text */
+  content: ""; position: absolute; left: 50%; top: calc(100% + 4px); width: 18px; height: 18px; margin-left: -9px;
+  border: 1.5px solid var(--star); border-radius: 50%; }
+
+/* a soft shadow pooled in the lower-left keeps the caption legible over bright scenes */
+.intro-scrim { position: absolute; left: 0; bottom: 0; width: min(900px, 100vw); height: 62vh; pointer-events: none;
+  background: radial-gradient(ellipse 85% 75% at 0% 100%, rgba(0, 0, 0, .78) 0%, rgba(0, 0, 0, .45) 45%, transparent 75%); }
+
+/* chapter caption: the one typographic moment */
+.intro-caption { position: absolute; left: max(24px, 6vw); bottom: 128px; max-width: min(760px, 88vw);
+  opacity: 0; transform: translateY(10px); transition: opacity .6s ease, transform .6s ease; }
+.intro-caption.show { opacity: 1; transform: none; }
+.intro-caption h1 { margin: 0 0 14px; font-family: Fraunces, Georgia, serif; font-weight: 300;
+  font-size: clamp(42px, 6.4vw, 92px); line-height: 1.0; letter-spacing: -0.015em; font-variation-settings: "opsz" 144; }
+.intro-caption p { margin: 0; max-width: 40ch; font-size: clamp(15px, 1.25vw, 18px); line-height: 1.55; color: var(--dim); }
+#intro.ending .intro-caption, #intro.ending .intro-timeline, #intro.ending .intro-controls { opacity: 0; transition: opacity 1s ease; }
+
+/* controls */
+.intro-controls { position: absolute; top: 20px; right: 24px; display: flex; gap: 8px; }
+.intro-controls button { font: 500 13px Inter, system-ui, sans-serif; color: var(--star); background: rgba(0, 0, 0, .35);
+  border: 1px solid rgba(255, 255, 255, .28); border-radius: 999px; padding: 8px 16px; cursor: pointer; }
+.intro-controls button:hover { border-color: rgba(255, 255, 255, .7); }
+#intro button:focus-visible { outline: 2px solid var(--earth); outline-offset: 3px; }
+
+/* the journey: six real stops, placed by when they happen */
+.intro-timeline { position: absolute; left: max(24px, 6vw); right: max(24px, 6vw); bottom: 46px; height: 34px; }
+.intro-track { position: absolute; left: 0; right: 0; top: 0; height: 1px; background: rgba(255, 255, 255, .18); }
+.intro-fill { height: 1px; width: 0; background: var(--star); }
+.intro-timeline button { position: absolute; top: -5px; padding: 12px 0 0; background: none; border: 0; cursor: pointer;
+  font: 12px Inter, system-ui, sans-serif; color: rgba(238, 240, 246, .45); white-space: nowrap; transform: translateX(-5px); }
+.intro-timeline button::before { content: ""; position: absolute; left: 1px; top: 1px; width: 9px; height: 9px; border-radius: 50%;
+  background: #000; border: 1px solid rgba(255, 255, 255, .45); }
+.intro-timeline button:hover { color: var(--star); }
+.intro-timeline button.active { color: var(--star); }
+.intro-timeline button.active::before { background: var(--star); border-color: var(--star); }
+
+@media (max-width: 640px) {
+  .intro-caption { bottom: 110px; }
+  .intro-timeline button:not(.active) { font-size: 0; }
+}
+
+/* header button that replays the intro */
+.intro-replay { font: 500 12px Inter, system-ui, sans-serif; color: var(--text); background: transparent;
+  border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+.intro-replay:hover { border-color: var(--muted); }

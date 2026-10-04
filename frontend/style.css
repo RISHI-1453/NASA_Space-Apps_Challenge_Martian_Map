@@ -170,3 +170,4 @@ button.go:hover { background: #188038; border-color: #188038; }
 body.navigating #draw, body.navigating #undo, body.navigating #clear, body.navigating #nav-start { opacity: .45; pointer-events: none; }
 body.navigating .leaflet-control-layers, body.navigating .leaflet-control-zoom { margin-top: 120px; }
 .nav-ctrl-row[hidden] { display: none; }
+.header-right { display: flex; align-items: center; gap: 14px; }
