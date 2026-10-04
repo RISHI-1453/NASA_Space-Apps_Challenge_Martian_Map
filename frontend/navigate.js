@@ -18,7 +18,7 @@ const Nav = (() => {
   let mode = "sim", simT = 0, simTimer = null, simSpeed = 60, drift = false, driftOff = 0;
   let startWall = 0, follow = true, voice = false, lastSaid = "", fixCount = 0;
   const layer = L.layerGroup();
-  let doneLine, trail, posMarker, rejoinLine;
+  let doneLine, trail, posMarker, rejoinLine, accCircle;
   const ui = {};
 
   // ---- geometry in a local metric plane around the route ----
@@ -80,13 +80,17 @@ const Nav = (() => {
     ui.alert.hidden = true;
     ui.bottom = mk("nav-bottom");
     ui.ctrl = mk("nav-ctrl", `
-      <div class="nav-ctrl-row"><b>Position source</b>
-        <select id="nav-mode"><option value="sim">Simulate walk</option><option value="manual">Nav fixes (tap map)</option></select></div>
-      <div class="nav-ctrl-row" id="nav-sim-row">
-        <button id="nav-play">❚❚</button>
+      <div class="nav-ctrl-row"><b>Your position from</b>
+        <select id="nav-mode"><option value="manual">Nav fixes</option><option value="sim">Demo: simulate a walk</option></select></div>
+      <div class="nav-ctrl-col" id="nav-man-row">
+        <button id="nav-tap" type="button">📍 Tap my position on the map</button>
+        <form id="nav-coord" class="nav-ctrl-row"><input id="nav-coord-in" placeholder="or type lat, lon" aria-label="Nav fix coordinates" autocomplete="off"><button type="submit">Go</button></form>
+        <span class="muted small" id="nav-lastfix">Starting at A. Report your position as you walk.</span>
+      </div>
+      <div class="nav-ctrl-row" id="nav-sim-row" hidden>
+        <button id="nav-play">▶</button>
         <select id="nav-speed"><option value="10">10×</option><option value="60" selected>60×</option><option value="300">300×</option><option value="900">900×</option></select>
         <label><input type="checkbox" id="nav-drift"> Drift off route</label></div>
-      <div class="nav-ctrl-row muted" id="nav-man-row" hidden>Tap the map where your nav fix puts you, or use “Your position” → I'm here.</div>
       <div class="nav-ctrl-row"><label><input type="checkbox" id="nav-voice"> 🔊 Voice</label></div>`);
     L.DomEvent.disableClickPropagation(ui.ctrl);
     L.DomEvent.disableClickPropagation(ui.bottom);
@@ -96,6 +100,14 @@ const Nav = (() => {
     ui.ctrl.querySelector("#nav-speed").onchange = (e) => { simSpeed = +e.target.value; };
     ui.ctrl.querySelector("#nav-drift").onchange = (e) => { drift = e.target.checked; };
     ui.ctrl.querySelector("#nav-voice").onchange = (e) => { voice = e.target.checked; lastSaid = ""; };
+    ui.ctrl.querySelector("#nav-tap").onclick = () => armTap(!tapArmed);
+    ui.ctrl.querySelector("#nav-coord").onsubmit = (e) => {
+      e.preventDefault();
+      const c = parseCoords(ui.ctrl.querySelector("#nav-coord-in").value || "");
+      if (!c) { ui.ctrl.querySelector("#nav-lastfix").textContent = "Couldn't read that — try e.g. 18.4521, 77.4380"; return; }
+      ui.ctrl.querySelector("#nav-coord-in").value = "";
+      fix(c[0], c[1], 15, "typed");
+    };
     map.on("dragstart", stopFollow);
   }
   function stopFollow() { if (active) { follow = false; render(lastState); } }
@@ -109,15 +121,21 @@ const Nav = (() => {
 
   // ---- core: process one position fix ----
   let lastState = null;
-  function fix(lat, lon) {
+  function fix(lat, lon, acc = 15, how = "fix") {
     if (!active) return;
     fixCount++;
     const s = snap(lat, lon);
     const along = s.along;
-    // wrong-way: progress went backwards noticeably on two consecutive fixes
-    wrongWayCount = along < lastAlong - 15 ? wrongWayCount + 1 : 0;
+    // wrong way: clearly backwards (beyond the fix's own uncertainty) on three fixes in a row
+    wrongWayCount = how === "refresh" ? wrongWayCount : along < lastAlong - Math.max(20, acc) ? wrongWayCount + 1 : 0;
     lastAlong = along;
-    const offRoute = s.d > OFF_ROUTE_M;
+    // off route only when the gap is bigger than the fix could be wrong by
+    const offRoute = s.d > Math.max(OFF_ROUTE_M, 2.5 * acc);
+    accCircle.setLatLng([lat, lon]).setRadius(acc);
+    if (acc > 8 && !layer.hasLayer(accCircle)) accCircle.addTo(layer);
+    if (acc <= 8) accCircle.remove();
+    const lf = document.getElementById("nav-lastfix");
+    if (lf && how !== "refresh" && how !== "sim") lf.textContent = `Last fix (${how === "tap" ? "map tap" : how === "typed" ? "typed" : how === "start" ? "route start" : "position"}): ${fmtLatLon(lat, lon)} ±${Math.round(acc)} m`;
     if (!offRoute) progress = Math.max(progress, along);
 
     trail.addLatLng([lat, lon]);
@@ -154,7 +172,7 @@ const Nav = (() => {
     const ltst = departLtst() + el / MARS_HOUR;
     const day = daylight(lat);
     const hazard = P.hazards.find((h) => h.dist_m > progress && h.dist_m <= progress + HAZARD_LOOKAHEAD_M);
-    lastState = { lat, lon, s, offRoute, next, total, el, tPlan, tRem, left, needRest, reserve, ltst, day, hazard, snapLL };
+    lastState = { lat, lon, acc, s, offRoute, next, total, el, tPlan, tRem, left, needRest, reserve, ltst, day, hazard, snapLL };
     render(lastState);
     if (follow) map.panTo([lat, lon], { animate: mode !== "sim" || simSpeed < 300 });
     if (next === -1 && arrived.has(stops.length - 1)) pauseSim();
@@ -192,7 +210,7 @@ const Nav = (() => {
     if (empty) alerts.push(["bad", `✗ ${empty.name} exhausted — switch to the backup supply and head straight back`]);
     else if (short) alerts.push(["bad", `⚠ TURN BACK — ${short.name.toLowerCase()}: the rest of the walk needs ${short.fmt(needRest[short.key])}, only ${short.fmt(Math.max(0, left[short.key] - reserve[short.key]))} usable`]);
     if (+Suit.state.heartRate > 160) alerts.push(["warn", `♥ Heart rate ${Suit.state.heartRate} bpm — slow down and rest`]);
-    if (wrongWayCount >= 2) alerts.push(["bad", "⚠ Wrong way — you're walking back along the route"]);
+    if (wrongWayCount >= 3) alerts.push(["bad", "⚠ Wrong way — you're walking back along the route"]);
     if (hazard) alerts.push(["warn", `⚠ ${hazard.slope_deg}° slope in ${fmtKm((hazard.dist_m - progress) / 1000)} — slow down, look for a gentler line`]);
     if (day && ltst + tRem / MARS_HOUR > day.set) alerts.push(["warn", `☾ At this pace you finish after sunset (${MarsTime.hhmm(day.set)})`]);
     const late = el - tPlan;
@@ -255,7 +273,7 @@ const Nav = (() => {
     TL = Suit.timeline(P);
     if (mode === "sim") simT = keepT;
     rebase();
-    if (lastState) fix(lastState.lat, lastState.lon);
+    if (lastState) fix(lastState.lat, lastState.lon, lastState.acc, "refresh");
   });
 
   function toast(text) {
@@ -277,7 +295,7 @@ const Nav = (() => {
     const [ax, ay] = pts[p.i], [bx, by] = pts[p.i + 1];
     const len = Math.hypot(bx - ax, by - ay) || 1;
     const nx = -(by - ay) / len, ny = (bx - ax) / len;
-    fix(...toLL(p.xy[0] + nx * driftOff, p.xy[1] + ny * driftOff));
+    fix(...toLL(p.xy[0] + nx * driftOff, p.xy[1] + ny * driftOff), 5, "sim");
   }
   function playSim() {
     if (simTimer || mode !== "sim") return;
@@ -292,7 +310,7 @@ const Nav = (() => {
     mode = m;
     document.getElementById("nav-sim-row").hidden = m !== "sim";
     document.getElementById("nav-man-row").hidden = m !== "manual";
-    if (m === "sim") playSim();
+    if (m === "sim") { armTap(false); playSim(); }
     else { pauseSim(); startWall = Date.now() - simT * 3.6e6; } // keep the mission clock continuous
   }
 
@@ -317,18 +335,20 @@ const Nav = (() => {
     doneLine = L.polyline([], { color: "#9aa0a6", weight: 6, opacity: 0.95, lineCap: "round", interactive: false }).addTo(layer);
     trail = L.polyline([], { color: "#fff", weight: 2, dashArray: "1 6", opacity: 0.9, interactive: false }).addTo(layer);
     rejoinLine = L.polyline([], { color: RED, weight: 2, dashArray: "6 6", interactive: false }).addTo(layer);
+    accCircle = L.circle([lat0, lon0], { radius: 10, color: ROUTE, weight: 1, fillOpacity: 0.12, interactive: false });
     posMarker = L.marker([lat0, lon0], { icon: L.divIcon({ className: "", html: '<div class="me-dot nav"></div>', iconSize: [22, 22], iconAnchor: [11, 11] }), zIndexOffset: 3000, interactive: false });
     buildHud();
     map.setView([lat0, lon0], Math.max(map.getZoom(), 15));
-    // use real nav fixes if the astronaut's saved position is at the route start, else demo
-    const nearStart = me && Math.hypot(...toXY(me[0], me[1])) < 500;
-    mode = nearStart ? "manual" : "sim";
+    // the walk starts at A; it only moves when the astronaut reports a position (or picks the demo)
+    mode = "manual";
     document.getElementById("nav-mode").value = mode;
     setMode(mode);
-    fix(...(me && mode === "manual" ? me : [lat0, lon0]));
+    const atStart = me && Math.hypot(...toXY(me[0], me[1])) < 100;
+    fix(...(atStart ? me : [lat0, lon0]), atStart ? 15 : 3, atStart ? "position" : "start");
   }
   function stop() {
     pauseSim();
+    armTap(false);
     active = false;
     document.body.classList.remove("navigating");
     map.off("dragstart", stopFollow);
@@ -338,7 +358,22 @@ const Nav = (() => {
   }
 
   // manual fixes: tap the map
-  map.on("click", (e) => { if (active && mode === "manual" && !picking) fix(e.latlng.lat, e.latlng.lng); });
+  // a map click is a position fix only right after "Tap my position" — never by accident
+  let tapArmed = false;
+  function armTap(on) {
+    tapArmed = on;
+    const b = document.getElementById("nav-tap");
+    if (b) { b.classList.toggle("active", on); b.textContent = on ? "Tap where you are… (Esc to cancel)" : "📍 Tap my position on the map"; }
+    map.getContainer().style.cursor = on ? "crosshair" : "";
+  }
+  map.on("click", (e) => {
+    if (!active || !tapArmed) return;
+    armTap(false);
+    // a tap is only as precise as the zoom level: ~12 screen pixels
+    const mPerPx = (180 / (256 * 2 ** map.getZoom())) * ((R * Math.PI) / 180);
+    fix(e.latlng.lat, e.latlng.lng, Math.max(5, 12 * mPerPx), "tap");
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && tapArmed) armTap(false); });
 
   return { start, stop, fix, get active() { return active; } };
 })();

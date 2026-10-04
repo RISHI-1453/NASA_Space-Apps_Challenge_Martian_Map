@@ -391,10 +391,12 @@ function renderPanel(p, labels) {
   });
 
   const src = Object.entries(s.dem_sources || {}).map(([k, v]) => `${k} ${v}%`).join(" · ");
-  const coarse = Object.keys(s.dem_sources || {}).some((k) => k.startsWith("MGS MOLA"));
-  $("dem-note").textContent = `Terrain: ${src}. ` + (coarse
-    ? "Parts of this route only have coarse MOLA heights — big hills show up, cliffs and boulders may not. "
-    : "High-resolution terrain: crater walls and scarps are captured; individual boulders are not. ") +
+  const keys = Object.keys(s.dem_sources || {});
+  $("dem-note").textContent = `Terrain: ${src}. ` + (keys.some((k) => k.startsWith("MGS MOLA"))
+    ? "Parts of this route only have coarse MOLA heights (3.7 km) — big hills show up, cliffs and boulders may not. "
+    : keys.some((k) => k.startsWith("HRSC"))
+      ? "200 m terrain: hills and large crater walls show up; small scarps and boulders don't. "
+      : "High-resolution terrain: crater walls and scarps are captured; individual boulders are not. ") +
     "Walk times use Tobler's hiking formula slowed for a pressurised suit.";
 }
 
@@ -509,7 +511,7 @@ async function whereis(lat, lon) {
 // ----- set / show my position -----
 async function setMe(lat, lon, { fly = true, save = true } = {}) {
   me = [lat, lon];
-  if (typeof Nav !== "undefined" && Nav.active) Nav.fix(lat, lon); // a new nav fix during a Marswalk
+  if (typeof Nav !== "undefined" && Nav.active) Nav.fix(lat, lon, 15, "position"); // a new nav fix during a Marswalk
   meLayer.clearLayers();
   L.marker(me, { icon: L.divIcon({ className: "", html: '<div class="me-dot"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), zIndexOffset: 2000, keyboard: false })
     .bindTooltip("You are here", { direction: "top", offset: [0, -10] }).addTo(meLayer);

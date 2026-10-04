@@ -46,7 +46,8 @@ At the end, the Mars globe turns past famous places, then **unrolls into the fla
 
 **Terrain (heights, slopes):** uses the sharpest model covering each point.
 - CTX Jezero DTM, 20 m/px. This is the USGS Mars 2020 landing-navigation product, with coverage shown as a green dashed box on the map.
-- MGS MOLA MEGDR, about 3.7 km/px, everywhere else.
+- **USGS HRSC/MOLA blended DEM, 200 m/px, everywhere on Mars.** The source file is 11 GB, uncompressed and stored row by row, so `backend/globaldem.py` reads only the rows it needs straight from the public copy, using HTTP range requests (about 0.5 KB per row, fetched in parallel and cached).
+- MGS MOLA MEGDR, about 3.7 km/px, as the offline fallback.
 
 **Directions (from → stops → to):** works like a maps app. A start or destination can be your position, a landing site, any of the 2,052 IAU-named places, typed coordinates (`-4.6, 137.4`), or a point chosen on the map. Stops can be added in between, and ⇅ swaps the ends. Every site, search result and dropped pin offers *Directions to here*, *Start from here*, *Add as stop* and *Ground view*. Points chosen on the map are named after the feature they're in, e.g. "Inside Jezero".
 
@@ -60,7 +61,7 @@ The route summary shows the share of each supply the walk uses and names the **l
 
 **Ground view (Street View for Mars):**
 - **Rover photos:** finds the nearest Perseverance or Curiosity stop within 3 km (from NASA's MMGIS rover-traverse data). It lays out that stop's Navcam frames around 360° by the mast azimuth and elevation recorded with each frame (NASA raw-image APIs). Drag to look around, scroll to zoom, and click a frame for full size. This covers Jezero (Perseverance) and Gale (Curiosity).
-- **3D terrain:** the sharpest elevation model (CTX DTM 20 m in Jezero, MOLA elsewhere) draped with Mars Trek imagery (HiRISE 25 cm, CTX 6 m or Viking), with a Mars sky and the sun placed for your departure time. You can view it from overhead or **stand there at eye level**, with a *Relief ×3* toggle.
+- **3D terrain:** the sharpest elevation model (CTX DTM 20 m in Jezero, the HRSC/MOLA 200 m model elsewhere), with an area sized to match: about 8 km in Jezero, about 36 km elsewhere. It's draped with sharp greyscale detail (HiRISE, CTX or THEMIS 100 m), coloured from the Viking mosaic using a *luminosity* blend, under a Mars sky with the sun placed for your departure time. You can view it from overhead or **stand there at eye level**, with a *Relief ×3* toggle.
 - **Walk it in 3D:** fly along the planned route by drone, at eye level or in free look, with the path coloured by slope and the A/B/C pins in place. A scrub bar shows distance, elevation, slope and the current instruction.
 
 **Your position (no GPS on Mars):**
@@ -82,7 +83,12 @@ The route summary shows the share of each supply the walk uses and names the **l
 - **Export:** GeoJSON of the route, stops, stats and directions.
 
 **Live Marswalk guidance (▶ Start Marswalk):** answers "am I on the right path?" while walking.
-- **Position input:** Mars has no GPS, so position comes from the suit or rover **nav fix**. Tap the map, or use *Your position → I'm here*. **Simulate walk** plays the route at 10–900× for demos, with an optional *Drift off route*.
+- **Position input:** Mars has no GPS, so position comes from the suit or rover **nav fix**. The walk starts at A and **only moves when the astronaut reports a position**:
+  - **📍 Tap my position:** one deliberate map tap. Ordinary map clicks are ignored.
+  - **Typed coordinates.**
+  - **Your position → I'm here.**
+
+  Each fix carries an accuracy (a tap is about 12 screen pixels at the current zoom), shown as a circle. *Off route* only triggers beyond that uncertainty, and *wrong way* needs three clearly backwards fixes. **Demo: simulate a walk** is opt-in (10–900×, optional drift).
 - **Snapping to the route:** each fix is matched to the nearest point on the planned route. It never jumps more than 100 m backwards, so an out-and-back route can't snap onto the return leg too early.
 - **Next-turn card (green):** distance to the next stop and what to do there, e.g. "898 m · At C: turn left west-northwest".
 - **Off route (red card):** appears beyond 40 m from the path, with the compass heading back to it and a dashed line to the nearest point on the route.
@@ -108,6 +114,7 @@ The route summary shows the share of each supply the walk uses and names the **l
 backend/app.py       FastAPI: /api/sites, /api/places, /api/whereis, /api/elevation, /api/dem, /api/profile,
                      /api/rover/nearest, /api/rover/photos, /api/terrain/grid
 backend/places.py    IAU place-name search + "where am I" descriptions
+backend/globaldem.py 200 m global DEM via HTTP range reads (USGS HRSC/MOLA blend)
 backend/rover.py     nearest rover stop + its Navcam photos (NASA MMGIS + raw-image APIs, cached)
 backend/terrain.py   DEM sampling (local DTMs -> MOLA), great-circle densify, legs/directions, slope/EVA model
 frontend/            Leaflet (EPSG:4326 + Trek tiles), Chart.js profile, Mars clock

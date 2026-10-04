@@ -2,7 +2,8 @@
 
 Elevation comes from the sharpest source covering a point:
   1. Local high-resolution DTMs (e.g. Jezero CTX, 20 m/px) - see LOCAL_DEMS
-  2. MGS MOLA MEGDR global grid, 16 px/deg (~3.7 km/px) - everywhere else
+  2. USGS HRSC/MOLA blended global DEM, 200 m/px, read on demand over HTTP - globaldem.py
+  3. MGS MOLA MEGDR global grid, 16 px/deg (~3.7 km/px) - offline fallback
 
 Coordinates: planetocentric latitude, EAST longitude in [-180, 180] (what the Leaflet map uses).
 Heights are metres relative to the MOLA areoid (the local DTMs are tied to MOLA).
@@ -13,6 +14,8 @@ import math
 from pathlib import Path
 
 import numpy as np
+
+import globaldem
 
 MARS_RADIUS_M = 3_389_500
 DATA = Path(__file__).resolve().parent.parent / "data"
@@ -109,7 +112,17 @@ def elevation_src(lat: float, lon: float) -> tuple[float, str]:
         v = d.sample(lat, lon)
         if v is not None:
             return v, d.label
+    v = globaldem.sample(lat, lon)
+    if v is not None:
+        return v, globaldem.LABEL
     return mola_elevation(lat, lon), MOLA_LABEL
+
+
+def prefetch(s: float, w: float, n: float, e: float) -> None:
+    """Warm the 200 m global DEM for an area (skipped where a local DTM covers it all)."""
+    if any(d.available() and d.bounds[0] <= s and d.bounds[1] <= w and d.bounds[2] >= n and d.bounds[3] >= e for d in LOCAL_DEMS):
+        return
+    globaldem.prefetch(s, w, n, e)
 
 
 def elevation(lat: float, lon: float) -> float:
@@ -117,7 +130,8 @@ def elevation(lat: float, lon: float) -> float:
 
 
 def dem_coverage() -> list[dict]:
-    out = [{"name": "mola", "label": MOLA_LABEL, "resolution_m": 3697, "bounds": [-90, -180, 90, 180]}]
+    out = [{"name": "mola", "label": MOLA_LABEL, "resolution_m": 3697, "bounds": [-90, -180, 90, 180]},
+           {"name": "hrsc_mola", "label": globaldem.LABEL, "resolution_m": globaldem.RES_M, "bounds": [-90, -180, 90, 180]}]
     for d in LOCAL_DEMS:
         if d.available():
             out.append({"name": d.name, "label": d.label, "resolution_m": d.res_m, "bounds": list(d.bounds)})
@@ -236,6 +250,8 @@ def profile(waypoints: list[tuple[float, float]], step_m: float = 250) -> dict:
 
     # keep the sample count sane on very long routes
     total = sum(haversine_m(a, b) for a, b in zip(waypoints, waypoints[1:]))
+    la = [p[0] for p in waypoints]; lo = [p[1] for p in waypoints]
+    prefetch(min(la) - 0.01, min(lo) - 0.01, max(la) + 0.01, max(lo) + 0.01)
     step_m = max(step_m, total / 3000)
 
     first = tuple(waypoints[0])

@@ -73,6 +73,7 @@ def terrain_grid(s: float, w: float, n: float, e: float, nx: int = 160, ny: int 
     import numpy as np
     out = np.empty((ny, nx), dtype="<f4")
     sources: dict[str, int] = {}
+    terrain.prefetch(s, w, n, e)
     for j in range(ny):
         lat = n - (n - s) * j / (ny - 1)
         for i in range(nx):

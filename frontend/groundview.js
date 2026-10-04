@@ -182,37 +182,46 @@ const GroundView = (() => {
   }
 
   // ---------- 3D terrain ----------
-  async function imagery(THREE, b) {
-    const inside = (box) => b.s >= box[0][0] && b.n <= box[1][0] && b.w >= box[0][1] && b.e <= box[1][1];
-    let [layer, ext, maxZ, label] = inside(JEZ_HIRISE) ? ["JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd", "png", 17, "HiRISE 25 cm"]
-      : inside(JEZ_CTX) ? ["JEZ_ctx_B_soc_008_orthoMosaic_6m_Eqc_latTs0_lon0", "png", 13, "CTX 6 m"]
-      : ["Mars_Viking_MDIM21_ClrMosaic_global_232m", "jpg", 7, "Viking 232 m (coarse)"];
+  // stitch Mars Trek tiles covering bounds b into a canvas cropped exactly to b
+  async function trekCanvas(b, layer, ext, maxZ, maxTiles = 64) {
     let z = Math.max(0, Math.min(maxZ, Math.floor(Math.log2((8 * 180) / (b.e - b.w)))));
     const range = (zz) => { const deg = 180 / 2 ** zz; return { deg, c0: Math.floor((b.w + 180) / deg), c1: Math.floor((b.e + 180) / deg), r0: Math.floor((90 - b.n) / deg), r1: Math.floor((90 - b.s) / deg) }; };
     let g = range(z);
-    while ((g.c1 - g.c0 + 1) * (g.r1 - g.r0 + 1) > 64 && z > 0) g = range(--z);
-    const cw = (g.c1 - g.c0 + 1) * 256, ch = (g.r1 - g.r0 + 1) * 256;
-    const tiles = document.createElement("canvas"); tiles.width = cw; tiles.height = ch;
+    while ((g.c1 - g.c0 + 1) * (g.r1 - g.r0 + 1) > maxTiles && z > 0) g = range(--z);
+    const tiles = document.createElement("canvas");
+    tiles.width = (g.c1 - g.c0 + 1) * 256; tiles.height = (g.r1 - g.r0 + 1) * 256;
     const tg = tiles.getContext("2d");
-    tg.fillStyle = "#8a6a52"; tg.fillRect(0, 0, cw, ch);
-    const jobs = [];
-    for (let r = g.r0; r <= g.r1; r++) for (let c = g.c0; c <= g.c1; c++) {
-      jobs.push(new Promise((ok) => {
-        const im = new Image(); im.crossOrigin = "anonymous";
-        im.onload = () => { tg.drawImage(im, (c - g.c0) * 256, (r - g.r0) * 256); ok(); };
-        im.onerror = ok;
-        im.src = `https://trek.nasa.gov/tiles/Mars/EQ/${layer}/1.0.0/default/default028mm/${z}/${r}/${c}.${ext}`;
-      }));
-    }
-    await Promise.all(jobs);
+    let ok = 0;
+    await Promise.all([...Array((g.r1 - g.r0 + 1) * (g.c1 - g.c0 + 1)).keys()].map((k) => new Promise((done) => {
+      const r = g.r0 + Math.floor(k / (g.c1 - g.c0 + 1)), c = g.c0 + (k % (g.c1 - g.c0 + 1));
+      const im = new Image(); im.crossOrigin = "anonymous";
+      im.onload = () => { tg.drawImage(im, (c - g.c0) * 256, (r - g.r0) * 256); ok++; done(); };
+      im.onerror = done;
+      im.src = `https://trek.nasa.gov/tiles/Mars/EQ/${layer}/1.0.0/default/default028mm/${z}/${r}/${c}.${ext}`;
+    })));
     const sx = ((b.w + 180) / g.deg - g.c0) * 256, sy = ((90 - b.n) / g.deg - g.r0) * 256;
     const sw = ((b.e - b.w) / g.deg) * 256, sh = ((b.n - b.s) / g.deg) * 256;
-    const out = document.createElement("canvas");
-    out.width = Math.max(2, Math.round(sw)); out.height = Math.max(2, Math.round(sh));
-    out.getContext("2d").drawImage(tiles, sx, sy, sw, sh, 0, 0, out.width, out.height);
+    return { tiles, sx, sy, sw, sh, ok };
+  }
+  // sharp detail (HiRISE / CTX / THEMIS, greyscale) coloured by the Viking colour mosaic
+  async function imagery(THREE, b) {
+    const inside = (box) => b.s >= box[0][0] && b.n <= box[1][0] && b.w >= box[0][1] && b.e <= box[1][1];
+    const detail = inside(JEZ_HIRISE) && b.e - b.w < 0.12 ? ["JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd", "png", 17, "HiRISE 25 cm"]
+      : inside(JEZ_CTX) ? ["JEZ_ctx_B_soc_008_orthoMosaic_6m_Eqc_latTs0_lon0", "png", 13, "CTX 6 m"]
+      : ["THEMIS_DayIR_ControlledMosaics_100m_v2_oct2018", "png", 9, "THEMIS 100 m"];
+    const [det, col] = await Promise.all([trekCanvas(b, ...detail.slice(0, 3)), trekCanvas(b, "Mars_Viking_MDIM21_ClrMosaic_global_232m", "jpg", 7, 16)]);
+    const W = Math.max(2, Math.min(4096, Math.round(det.sw))), H = Math.max(2, Math.min(4096, Math.round(det.sh)));
+    const out = document.createElement("canvas"); out.width = W; out.height = H;
+    const g = out.getContext("2d");
+    g.drawImage(col.tiles, col.sx, col.sy, col.sw, col.sh, 0, 0, W, H);   // colour
+    if (det.ok) {
+      g.globalCompositeOperation = "luminosity";                          // + sharp detail
+      g.drawImage(det.tiles, det.sx, det.sy, det.sw, det.sh, 0, 0, W, H);
+      g.globalCompositeOperation = "source-over";
+    }
     const t = new THREE.CanvasTexture(out);
     t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
-    return { tex: t, label };
+    return { tex: t, label: det.ok ? `${detail[3]} detail, Viking colour` : "Viking 232 m" };
   }
 
   function skyTexture(THREE) {
@@ -248,7 +257,12 @@ const GroundView = (() => {
       w = Math.min(...S.map((p) => p.lon)); e = Math.max(...S.map((p) => p.lon));
     } else { s = n = lat; w = e = lon; }
     const latC = (s + n) / 2, kx = R * Math.cos(latC * D2R) * D2R, ky = R * D2R;
-    const padM = Math.max(900, 0.2 * Math.max((n - s) * ky, (e - w) * kx));
+    // size the area to the elevation data: 20 m DTM → walking scale; 200 m → landscape; MOLA → regional
+    let srcLabel = "";
+    try { srcLabel = (await (await fetch(`/api/elevation?lat=${latC}&lon=${(w + e) / 2}`)).json()).source || ""; } catch {}
+    if (!body) return;
+    const minPad = srcLabel.startsWith("CTX") ? 4000 : srcLabel.startsWith("HRSC") ? 18000 : 80000;
+    const padM = Math.max(minPad, 0.2 * Math.max((n - s) * ky, (e - w) * kx));
     s -= padM / ky; n += padM / ky; w -= padM / kx; e += padM / kx;
     const lonC = (w + e) / 2, latC2 = (s + n) / 2;
     const Wm = (e - w) * kx, Hm = (n - s) * ky;
@@ -300,7 +314,7 @@ const GroundView = (() => {
     geo.computeVertexNormals();
     const world = new THREE.Group(); // terrain, route and pins: scaled together for relief exaggeration
     scene.add(world);
-    const tint = img.label.startsWith("Viking") ? 0xffffff : 0xf0cba4;
+    const tint = 0xffffff;
     world.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: img.tex, color: tint, roughness: 1, metalness: 0 })));
 
     // route ribbon + stop pins
@@ -358,7 +372,8 @@ const GroundView = (() => {
         const c = path ? pointAt(along).p.clone() : new THREE.Vector3(cx, 0, cz);
         c.y = ground(c.x, c.z);
         controls.target.copy(c);
-        camera.position.copy(c).add(new THREE.Vector3(-maxDim * 0.16, maxDim * 0.11, maxDim * 0.16));
+        // from the south and above, like looking at a tilted map: the whole landscape in view
+        camera.position.copy(c).add(new THREE.Vector3(-maxDim * 0.04, maxDim * (route ? 0.2 : 0.24), maxDim * (route ? 0.32 : 0.4)));
       }
       hud.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === m)));
     }
