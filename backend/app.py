@@ -66,4 +66,14 @@ def profile(route: Route):
         raise HTTPException(503, str(e))
 
 
-app.mount("/", StaticFiles(directory=ROOT / "frontend", html=True), name="frontend")
+class Frontend(StaticFiles):
+    """Static files that browsers re-validate on every load (cheap 304s via ETag), so a deploy
+    never leaves visitors on a stale app.js."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+app.mount("/", Frontend(directory=ROOT / "frontend", html=True), name="frontend")

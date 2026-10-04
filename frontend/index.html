@@ -8,7 +8,9 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="intro.css">
-  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }</script>
+  <script type="importmap">{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/" } }</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
@@ -94,14 +96,21 @@
   <script src="navigate.js"></script>
   <script type="module">
     import { playIntro } from "./intro.js";
-    const JEZERO = [18.4447, 77.4508];
+    // where the whole planet sits on screen, so the intro's unrolled globe lands exactly on it
+    function mapWorldRect() {
+      const r = map.getContainer().getBoundingClientRect();
+      const nw = map.latLngToContainerPoint([90, -180]), se = map.latLngToContainerPoint([-90, 180]);
+      return { left: r.left + nw.x, top: r.top + nw.y, width: se.x - nw.x, height: se.y - nw.y };
+    }
     function startIntro() {
-      // the intro ends ~7° above Jezero, which matches map zoom 7; the map then keeps descending
-      map.setView(JEZERO, 7, { animate: false });
-      window.intro = playIntro({ onDone: () => { // handle kept for testing / presenter remote
-        map.invalidateSize();
-        map.flyTo(JEZERO, 11, { duration: 2.6 });
-      } });
+      map.setView([0, 0], 1, { animate: false }); // the intro ends on the whole planet
+      window.intro = playIntro({ // handle kept for testing / a presenter remote
+        mapRect: mapWorldRect,
+        onDone: () => {
+          map.invalidateSize();
+          if (me) map.flyTo(me, 11, { duration: 2.4 }); // a saved position: carry on down to it
+        },
+      });
     }
     const skip = /nointro/.test(location.hash) || new URLSearchParams(location.search).get("intro") === "0"
       || matchMedia("(prefers-reduced-motion: reduce)").matches;

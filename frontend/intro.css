@@ -69,3 +69,26 @@
 .intro-replay { font: 500 12px Inter, system-ui, sans-serif; color: var(--text); background: transparent;
   border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
 .intro-replay:hover { border-color: var(--muted); }
+
+/* ---------- title screen ---------- */
+.intro-title { position: absolute; left: max(24px, 6vw); top: 50%; transform: translateY(-50%); max-width: min(760px, 88vw);
+  transition: opacity .8s ease, transform .8s ease; }
+#intro:not(.titled) .intro-title { opacity: 0; transform: translateY(-46%); pointer-events: none; }
+#intro.titled .intro-caption, #intro.titled .intro-timeline, #intro.titled .intro-controls { opacity: 0; pointer-events: none; }
+.intro-by { margin: 0 0 10px; font-size: 15px; color: var(--dim); }
+.intro-title h1 { margin: 0 0 18px; font-family: Fraunces, Georgia, serif; font-weight: 300; font-size: clamp(56px, 9vw, 136px);
+  line-height: .95; letter-spacing: -0.02em; font-variation-settings: "opsz" 144; }
+.intro-lede { margin: 0 0 30px; max-width: 34ch; font-size: clamp(17px, 1.5vw, 21px); line-height: 1.5; color: var(--star); }
+.intro-title-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.intro-begin { font: 600 16px Inter, system-ui, sans-serif; color: #000; background: var(--star); border: 0;
+  border-radius: 999px; padding: 13px 34px; cursor: pointer; }
+.intro-begin:hover { background: #fff; }
+.intro-skip-title { font: 500 15px Inter, system-ui, sans-serif; color: var(--star); background: transparent;
+  border: 1px solid rgba(255, 255, 255, .3); border-radius: 999px; padding: 12px 22px; cursor: pointer; }
+.intro-skip-title:hover { border-color: rgba(255, 255, 255, .7); }
+.intro-note { margin: 22px 0 0; font-size: 13px; color: rgba(238, 240, 246, .5); }
+
+/* famous places pinned to Mars as it turns and unrolls */
+.intro-label.place { font-size: 12px; font-weight: 500; color: #f6e2d4; }
+.intro-label.place::after { content: ""; position: absolute; left: 50%; top: calc(100% + 3px); width: 6px; height: 6px;
+  margin-left: -3px; border-radius: 50%; background: #f6e2d4; box-shadow: 0 0 0 2px rgba(0, 0, 0, .45); }

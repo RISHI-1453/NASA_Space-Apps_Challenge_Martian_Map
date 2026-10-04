@@ -21,11 +21,16 @@ python -m venv .venv
 
 ## Intro (for presenting)
 
-The app opens with a ~30-second 3D journey, built with Three.js: **Milky Way → the Sun → the solar system today → Earth → Mars → Jezero crater**. It then hands over to the map, which keeps descending into the Jezero delta.
-- **Real positions:** planets sit where they are *today*, using JPL approximate Keplerian elements. The Earth–Mars distance and radio delay in the captions are computed live and checked against JPL Horizons: 1.6446 vs 1.6447 AU on 4 Oct 2026.
-- **Real imagery:** NASA Blue Marble on Earth and the Viking MDIM 2.1 mosaic on Mars, with a sharper ~1 km/px patch around Jezero for the final descent (`scripts/build_textures.py`).
-- **Controls:** **Space** pause/play · **← / →** previous/next chapter · **Esc** or **Enter** skip to the map. Clicking a chapter on the timeline jumps to it. **Watch intro** in the header replays it.
-- **Skipping:** add `#nointro` to the URL (or `?intro=0`) to open straight on the map. Users with *reduced motion* switched on skip it automatically.
+The app opens on a title screen ("Code Huzzlers presents Martian Map"). Press **Begin** to start a ~38-second 3D journey with its own soundtrack:
+**Milky Way → dive into the Sun → the whole solar system today (all eight planets) → the inner planets → Earth → Earth and Mars together → "Anywhere on Mars"**.
+At the end, the Mars globe turns past famous places, then **unrolls into the flat map**. That flat map lands pixel-for-pixel on the app's whole-planet view, so the intro hands over without a cut. No particular site is preset: the app opens on the whole planet, or on your saved position.
+
+- **Real positions:** planets sit where they are *today*, using JPL approximate Keplerian elements. Earth–Mars distance and radio delay are computed live, and were checked against JPL Horizons (1.6446 vs 1.6447 AU on 4 Oct 2026). Distances are to scale; planet sizes are not.
+- **Real imagery:** NASA Blue Marble (Earth) and the Viking MDIM 2.1 colour mosaic (Mars), via `scripts/build_textures.py`. Place labels come from the IAU gazetteer.
+- **Look:** bloom glow on the Sun and galaxy core, atmosphere halos on Earth and Mars, and soft particle stars.
+- **Sound:** a score synthesised live with the Web Audio API (`frontend/score.js`, no audio files). It has a drone, evolving chords per chapter, a riser and boom on the Sun dive, shimmering arpeggios, a whoosh across to Mars, and a chime as the map lands. It stays in sync when you pause or jump.
+- **Controls:** **Begin** (or Enter) starts it. Then **Space** pauses or plays, **← / →** moves between chapters, **M** toggles sound, and **Esc** skips to the map. The chapter timeline is clickable, and **Watch intro** in the header replays it.
+- **Skipping:** add `#nointro` to the URL (or `?intro=0`) to open straight on the map. Users with *reduced motion* switched on skip it automatically; they can still press Watch intro.
 
 ## What works now
 
@@ -89,7 +94,8 @@ backend/app.py       FastAPI: /api/sites, /api/places, /api/whereis, /api/elevat
 backend/places.py    IAU place-name search + "where am I" descriptions
 backend/terrain.py   DEM sampling (local DTMs -> MOLA), great-circle densify, legs/directions, slope/EVA model
 frontend/            Leaflet (EPSG:4326 + Trek tiles), Chart.js profile, Mars clock
-frontend/intro.js    3D opener (galaxy → solar system → Jezero); textures in frontend/textures/
+frontend/intro.js    3D opener (galaxy → solar system → Mars → globe unrolls into the map); textures in frontend/textures/
+frontend/score.js    the intro's synthesised soundtrack (Web Audio)
 frontend/navigate.js live guidance: route snapping, off-route, next turn, O2/turn-back, simulation
 data/                sites.json, MOLA grid + Jezero DTM (downloaded, git-ignored)
 scripts/fetch_data.py      downloads the elevation data

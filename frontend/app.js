@@ -9,7 +9,7 @@ const trek = (layer, ext, maxNativeZoom, extra = {}) =>
 
 // ---------- map ----------
 const map = L.map("map", {
-  crs: L.CRS.EPSG4326, center: [18.4447, 77.4508], zoom: 9, minZoom: 1, maxZoom: 18,
+  crs: L.CRS.EPSG4326, center: [0, 0], zoom: 1, minZoom: 1, maxZoom: 18, // whole planet; no preset site
   maxBounds: [[-90, -180], [90, 180]], worldCopyJump: false,
 });
 
@@ -19,7 +19,20 @@ const baseLayers = {
   "THEMIS day infrared · 100 m": trek("THEMIS_DayIR_ControlledMosaics_100m_v2_oct2018", "png", 9),
   "MOLA color elevation · 463 m": trek("Mars_MGS_MOLA_ClrShade_merge_global_463m", "jpg", 6),
 };
-baseLayers["THEMIS day infrared · 100 m"].addTo(map);
+baseLayers["Viking color mosaic · 232 m"].addTo(map);
+// Colour Viking mosaic for planet-scale views, sharper THEMIS once zoomed in — unless the
+// user picks a basemap themselves (then we leave their choice alone).
+let autoBase = true, autoSwitching = false;
+map.on("baselayerchange", () => { if (!autoSwitching) autoBase = false; });
+map.on("zoomend", () => {
+  if (!autoBase) return;
+  const want = baseLayers[map.getZoom() >= 8 ? "THEMIS day infrared · 100 m" : "Viking color mosaic · 232 m"];
+  if (map.hasLayer(want)) return;
+  autoSwitching = true;
+  for (const l of Object.values(baseLayers)) if (map.hasLayer(l)) map.removeLayer(l);
+  want.addTo(map).bringToBack();
+  autoSwitching = false;
+});
 
 // High-resolution local mosaics, drawn on top only where they have coverage (Jezero crater)
 const JEZ_CTX = [[18.2110, 77.1605], [18.7212, 77.6992]];
@@ -73,7 +86,14 @@ fetch("/api/sites").then((r) => r.json()).then(({ sites }) => {
     map.flyTo([+o.dataset.lat, +o.dataset.lon], 8);
     updateConditions(+o.dataset.lat, +o.dataset.lon, o.textContent.slice(2));
   };
-  if (!me) updateConditions(18.4447, 77.4508, "Perseverance - Octavia E. Butler Landing");
+  // until a site, a position or a route is chosen, conditions follow the centre of the map
+  const followCentre = () => {
+    if (me || (condTarget && condTarget.label !== "Map centre")) return;
+    const c = map.getCenter();
+    updateConditions(c.lat, c.lng, "Map centre");
+  };
+  map.on("moveend", followCentre);
+  followCentre();
 });
 
 // ---------- cursor readout ----------
@@ -618,5 +638,8 @@ renderConditions();
 // restore last position (runs last: setMe needs the conditions panel above)
 try {
   const saved = JSON.parse(localStorage.getItem(ME_KEY) || "null");
-  if (Array.isArray(saved) && saved.length === 2) setMe(saved[0], saved[1], { fly: false, save: false });
+  if (Array.isArray(saved) && saved.length === 2) {
+    setMe(saved[0], saved[1], { fly: false, save: false });
+    map.setView(saved, 11, { animate: false });
+  }
 } catch {}
