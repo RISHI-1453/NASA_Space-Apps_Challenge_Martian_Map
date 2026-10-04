@@ -292,3 +292,6 @@ button.go.alt:hover { border-color: var(--accent); }
 #panel section[hidden] { display: none; }
 #panel section[data-tab] { border-bottom: 0; }
 #summary { scroll-margin-top: 52px; }
+.calc { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
+.calc .gv-spin { width: 18px; height: 18px; border-width: 2px; }
+.res[hidden] { display: none; }

@@ -224,13 +224,28 @@ async function analyse() {
   const pts = round ? [...waypoints, ...waypoints.slice(0, -1).reverse()] : [...waypoints];
   const labels = pts.map((_, j) => (j < n ? letter(j) : letter(n - 2 - (j - n))));
   const names = pts.map((_, j) => stopName(j < n ? j : n - 2 - (j - n)));
-  const r = await fetch("/api/profile", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ waypoints: pts, step_m: 50 }),
-  });
-  if (token !== analyseToken) return; // a newer edit superseded this request
-  if (!r.ok) { $("directions").textContent = "Elevation data unavailable — run scripts/fetch_data.py"; return; }
-  const p = await r.json();
+  // show that something is happening straight away
+  $("howto").hidden = true;
+  $("summary").hidden = false;
+  $("summary").innerHTML = `<div class="calc"><span class="gv-spin"></span>Calculating route ${names[0]} → ${names[n - 1]}…</div>`;
+  $("directions").innerHTML = "";
+  showTab("route");
+  let p;
+  try {
+    const r = await fetch("/api/profile", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ waypoints: pts, step_m: 50 }),
+    });
+    if (token !== analyseToken) return; // a newer edit superseded this request
+    if (!r.ok) throw new Error(r.status === 503 ? "elevation data missing on the server (run scripts/fetch_data.py)" : `server error ${r.status}`);
+    p = await r.json();
+  } catch (e) {
+    if (token !== analyseToken) return;
+    $("summary").innerHTML = `<div class="verdict no">✗ Couldn't calculate this route: ${e.message}. <button type="button" id="retry-route">Try again</button></div>`;
+    $("retry-route").onclick = () => redrawRoute();
+    return;
+  }
+  if (token !== analyseToken) return;
   lastProfile = p; lastLabels = labels; lastNames = names;
   drawRoute(p, n - 1);
   renderPanel(p, labels);
@@ -295,7 +310,9 @@ function renderPanel(p, labels) {
   const pctLeft = (key, i) => Math.max(0, Math.round(((have[key] - tl[key][i]) / (key === "co2" ? 8 : Suit.CAP[{ o2: "o2Kg", battery: "batteryWh", water: "waterKg" }[key]])) * 100));
 
   let verdict, cls;
-  if (!bud.ok) {
+  if (s.distance_km > 40) {
+    cls = "no"; verdict = `✗ ${fmtKm(s.distance_km)} is a rover traverse, not a walk — an EVA on foot covers roughly 5–20 km. Pick a closer destination, or drive most of the way and walk the last stretch.`;
+  } else if (!bud.ok) {
     cls = "no"; verdict = `✗ Not enough ${lim.name.toLowerCase()}: this walk needs ${lim.fmt(lim.need)} but only ${lim.fmt(lim.usable)} is usable after the ${reservePct}% reserve. Shorten the route, refill, or plan a rover leg.`;
   } else if (!day) {
     cls = "no"; verdict = "✗ Polar night at this latitude right now — no daylight for an EVA.";
@@ -312,7 +329,8 @@ function renderPanel(p, labels) {
 
   $("howto").hidden = true;
   $("summary").hidden = false;
-  const bars = bud.items.map((it) => {
+  const rover = s.distance_km > 40; // far beyond walking range: suit figures would be meaningless
+  const bars = rover ? "" : bud.items.map((it) => {
     const usedPct = Math.min(100, it.frac * 100), haveVsFull = it.avail;
     const color = !it.ok ? RED : it === lim ? AMBER : ROUTE;
     return `<div class="res-row${it === lim ? " lim" : ""}">
@@ -323,11 +341,11 @@ function renderPanel(p, labels) {
       <span class="res-val">${it.avail > 0 ? `${Math.round(it.frac * 100)}%` : "empty"}</span></div>`;
   }).join("");
   $("summary").innerHTML = `
-    <div class="big">${fmtDur(tl.hours)}<small>${fmtKm(s.distance_km)}${round ? " round trip" : ""}</small></div>
+    <div class="big">${rover ? fmtKm(s.distance_km) : fmtDur(tl.hours)}<small>${rover ? "rover-scale distance" : fmtKm(s.distance_km) + (round ? " round trip" : "")}</small></div>
     <div class="sub">${names[0]} → ${names[waypoints.length - 1]}${round ? " and back" : ""}</div>
     <div class="sub">↑ ${s.ascent_m} m climb · ↓ ${s.descent_m} m descent · max slope ${s.max_slope_deg}°</div>
-    <div class="sub">Depart ${MarsTime.hhmm(dep)} → finish ≈ ${clock(finish)} local solar time${day ? ` · daylight ${MarsTime.hhmm(day.rise)}–${MarsTime.hhmm(day.set)}` : ""}</div>
-    <div class="res">
+    ${rover ? "" : `<div class="sub">Depart ${MarsTime.hhmm(dep)} → finish ≈ ${clock(finish)} local solar time${day ? ` · daylight ${MarsTime.hhmm(day.rise)}–${MarsTime.hhmm(day.set)}` : ""}</div>`}
+    <div class="res"${rover ? " hidden" : ""}>
       <div class="res-head"><span>Share of what's in the suit this walk uses</span><span>reserve ${reservePct}%</span></div>
       ${bars}
       <div class="res-foot">Effort ≈ ${Math.round(tl.avgW)} W average, ${Math.round(tl.peakW)} W peak · pace: ${Suit.state.condition} · carrying ${Suit.state.loadKg} kg</div>
@@ -338,6 +356,7 @@ function renderPanel(p, labels) {
       <button id="walk-3d" class="go alt" title="Fly along the route at eye level">⛰ Walk it in 3D</button>
     </div>`;
   $("nav-start").onclick = () => Nav.start();
+  if (rover) { $("nav-start").disabled = true; $("nav-start").title = "Live guidance is for walks on foot"; }
   $("walk-3d").onclick = () => (typeof GroundView !== "undefined" ? GroundView.walk() : null);
 
   // turn-by-turn

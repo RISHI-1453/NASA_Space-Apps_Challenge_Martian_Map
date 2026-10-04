@@ -106,13 +106,13 @@ LOCAL_DEMS = [
 MOLA_LABEL = "MGS MOLA (3.7 km)"
 
 
-def elevation_src(lat: float, lon: float) -> tuple[float, str]:
+def elevation_src(lat: float, lon: float, fetch: bool = True) -> tuple[float, str]:
     """(elevation m, source label) from the sharpest DEM covering the point."""
     for d in LOCAL_DEMS:
         v = d.sample(lat, lon)
         if v is not None:
             return v, d.label
-    v = globaldem.sample(lat, lon)
+    v = globaldem.sample(lat, lon, fetch)
     if v is not None:
         return v, globaldem.LABEL
     return mola_elevation(lat, lon), MOLA_LABEL
@@ -250,12 +250,16 @@ def profile(waypoints: list[tuple[float, float]], step_m: float = 250) -> dict:
 
     # keep the sample count sane on very long routes
     total = sum(haversine_m(a, b) for a, b in zip(waypoints, waypoints[1:]))
-    la = [p[0] for p in waypoints]; lo = [p[1] for p in waypoints]
-    prefetch(min(la) - 0.01, min(lo) - 0.01, max(la) + 0.01, max(lo) + 0.01)
+    # walking-scale routes get the 200 m global DEM; for very long (rover-scale) routes the
+    # per-row downloads aren't worth it - MOLA (local file) is plenty at that scale
+    use_net = total <= 120_000
+    if use_net:
+        la = [p[0] for p in waypoints]; lo = [p[1] for p in waypoints]
+        prefetch(min(la) - 0.01, min(lo) - 0.01, max(la) + 0.01, max(lo) + 0.01)
     step_m = max(step_m, total / 3000)
 
     first = tuple(waypoints[0])
-    z0, src0 = elevation_src(*first)
+    z0, src0 = elevation_src(*first, fetch=use_net)
     add_sample(first, z0, 0.0, 0, src0)
 
     for li, (a, b) in enumerate(zip(waypoints, waypoints[1:])):
@@ -267,7 +271,7 @@ def profile(waypoints: list[tuple[float, float]], step_m: float = 250) -> dict:
         leg_hazards = 0
         prev_pt, prev_z = tuple(a), samples[-1]["elev_m"]
         for p in pts:
-            z, src = elevation_src(*p)
+            z, src = elevation_src(*p, fetch=use_net)
             d = haversine_m(prev_pt, p)
             dz = z - prev_z
             slope_deg = math.degrees(math.atan(abs(dz) / d)) if d > 0 else 0.0

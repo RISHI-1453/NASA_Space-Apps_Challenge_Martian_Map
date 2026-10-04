@@ -94,15 +94,15 @@ def _px(row: int, col: int) -> float | None:
     return None if v == NODATA else float(v)
 
 
-def sample(lat: float, lon: float) -> float | None:
-    """Bilinear elevation (m), or None if unavailable / no data."""
+def sample(lat: float, lon: float, fetch: bool = True) -> float | None:
+    """Bilinear elevation (m), or None if unavailable / no data / not cached (fetch=False)."""
     y = (90 - lat) / RES - 0.5
     x = (lon + 180) / RES - 0.5
     r, c = int(math.floor(y)), int(math.floor(x))
     if not (0 <= r < H - 1 and 0 <= c < W - 1):
         return None
     if (r, c // CHUNK) not in _cache or (r + 1, (c + 1) // CHUNK) not in _cache:
-        if not ensure(r, r + 1, c, c + 1):
+        if not fetch or not ensure(r, r + 1, c, c + 1):
             return None
     q = [_px(r, c), _px(r, c + 1), _px(r + 1, c), _px(r + 1, c + 1)]
     if any(v is None for v in q):
