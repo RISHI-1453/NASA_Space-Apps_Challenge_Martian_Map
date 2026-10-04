@@ -21,16 +21,16 @@ python -m venv .venv
 
 ## Intro (for presenting)
 
-The app opens on a title screen ("Code Huzzlers presents Martian Map"). Press **Begin** to start a ~38-second 3D journey with its own soundtrack:
+The intro plays every time the app opens. A title screen ("Code Huzzlers presents Martian Map") shows for about 3 seconds, then a ~38-second 3D journey starts by itself with its own soundtrack. Press **Begin** to start it straight away:
 **Milky Way → dive into the Sun → the whole solar system today (all eight planets) → the inner planets → Earth → Earth and Mars together → "Anywhere on Mars"**.
 At the end, the Mars globe turns past famous places, then **unrolls into the flat map**. That flat map lands pixel-for-pixel on the app's whole-planet view, so the intro hands over without a cut. No particular site is preset: the app opens on the whole planet, or on your saved position.
 
 - **Real positions:** planets sit where they are *today*, using JPL approximate Keplerian elements. Earth–Mars distance and radio delay are computed live, and were checked against JPL Horizons (1.6446 vs 1.6447 AU on 4 Oct 2026). Distances are to scale; planet sizes are not.
 - **Real imagery:** NASA Blue Marble (Earth) and the Viking MDIM 2.1 colour mosaic (Mars), via `scripts/build_textures.py`. Place labels come from the IAU gazetteer.
 - **Look:** bloom glow on the Sun and galaxy core, atmosphere halos on Earth and Mars, and soft particle stars.
-- **Sound:** a score synthesised live with the Web Audio API (`frontend/score.js`, no audio files). It has a drone, evolving chords per chapter, a riser and boom on the Sun dive, shimmering arpeggios, a whoosh across to Mars, and a chime as the map lands. It stays in sync when you pause or jump.
+- **Sound:** a score synthesised live with the Web Audio API (`frontend/score.js`, no audio files). It has a drone, evolving chords per chapter, a riser and boom on the Sun dive, shimmering arpeggios, a whoosh across to Mars, and a chime as the map lands. It stays in sync when you pause or jump. Browsers keep sound off until the viewer clicks or presses a key, so if nobody has, the **Click for sound** button pulses; the music then joins in at the right point.
 - **Controls:** **Begin** (or Enter) starts it. Then **Space** pauses or plays, **← / →** moves between chapters, **M** toggles sound, and **Esc** skips to the map. The chapter timeline is clickable, and **Watch intro** in the header replays it.
-- **Skipping:** add `#nointro` to the URL (or `?intro=0`) to open straight on the map. Users with *reduced motion* switched on skip it automatically; they can still press Watch intro.
+- **Skipping:** add `#nointro` to the URL (or `?intro=0`) to open straight on the map.
 
 ## What works now
 
@@ -38,8 +38,8 @@ At the end, the Mars globe turns past famous places, then **unrolls into the fla
 
 | Layer | Resolution | Mission |
 |---|---|---|
-| THEMIS day-infrared global mosaic (default) | 100 m/px | Mars Odyssey |
-| Viking color mosaic | 232 m/px | Viking orbiters |
+| THEMIS day-infrared global mosaic | 100 m/px | Mars Odyssey |
+| Viking color mosaic (default) | 232 m/px | Viking orbiters |
 | MOLA color elevation | 463 m/px | Mars Global Surveyor |
 | CTX Jezero mosaic (overlay) | 6 m/px | MRO |
 | HiRISE Jezero mosaic (overlay) | 25 cm/px | MRO |

@@ -20,20 +20,6 @@ const baseLayers = {
   "MOLA color elevation · 463 m": trek("Mars_MGS_MOLA_ClrShade_merge_global_463m", "jpg", 6),
 };
 baseLayers["Viking color mosaic · 232 m"].addTo(map);
-// Colour Viking mosaic for planet-scale views, sharper THEMIS once zoomed in — unless the
-// user picks a basemap themselves (then we leave their choice alone).
-let autoBase = true, autoSwitching = false;
-map.on("baselayerchange", () => { if (!autoSwitching) autoBase = false; });
-map.on("zoomend", () => {
-  if (!autoBase) return;
-  const want = baseLayers[map.getZoom() >= 8 ? "THEMIS day infrared · 100 m" : "Viking color mosaic · 232 m"];
-  if (map.hasLayer(want)) return;
-  autoSwitching = true;
-  for (const l of Object.values(baseLayers)) if (map.hasLayer(l)) map.removeLayer(l);
-  want.addTo(map).bringToBack();
-  autoSwitching = false;
-});
-
 // High-resolution local mosaics, drawn on top only where they have coverage (Jezero crater)
 const JEZ_CTX = [[18.2110, 77.1605], [18.7212, 77.6992]];
 const JEZ_HIRISE = [[18.3068, 77.2229], [18.6693, 77.5840]];

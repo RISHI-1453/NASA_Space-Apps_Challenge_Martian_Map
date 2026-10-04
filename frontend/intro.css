@@ -92,3 +92,5 @@
 .intro-label.place { font-size: 12px; font-weight: 500; color: #f6e2d4; }
 .intro-label.place::after { content: ""; position: absolute; left: 50%; top: calc(100% + 3px); width: 6px; height: 6px;
   margin-left: -3px; border-radius: 50%; background: #f6e2d4; box-shadow: 0 0 0 2px rgba(0, 0, 0, .45); }
+.intro-controls .intro-sound.locked { border-color: var(--star); animation: sound-hint 1.6s ease-in-out infinite; }
+@keyframes sound-hint { 50% { background: rgba(255, 255, 255, .16); } }

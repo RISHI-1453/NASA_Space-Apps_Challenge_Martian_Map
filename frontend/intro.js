@@ -148,7 +148,7 @@ function atmosphere(radius, color, strength) { // soft halo: brightest at the pl
   }));
 }
 
-export function playIntro({ onDone, mapRect } = {}) {
+export function playIntro({ onDone, mapRect, autoplay = true } = {}) {
   // ---------- DOM ----------
   const root = document.createElement("div");
   root.id = "intro";
@@ -426,8 +426,24 @@ export function playIntro({ onDone, mapRect } = {}) {
   let score = null, soundOn = true;
   function startSound() {
     if (!soundOn) return;
-    try { score = score || new Score(CUES); score.start(t); } catch { score = null; }
+    try { score = score || new Score(CUES); score.start(t); } catch { score = null; return; }
+    // browsers keep audio locked until the viewer clicks or presses a key; say so on the button
+    setTimeout(() => {
+      if (score && score.ctx.state !== "running" && !done) {
+        const b = $(".intro-sound"); b.textContent = "Click for sound"; b.classList.add("locked");
+      }
+    }, 400);
   }
+  // first click / key press anywhere: unlock audio and pick the music up where the picture is
+  function unlockSound() {
+    if (!score || score.ctx.state === "running" || done) return;
+    score.ctx.resume().then(() => {
+      if (playing && !done) score.start(t);
+      const b = $(".intro-sound"); b.classList.remove("locked"); b.textContent = soundOn ? "Sound on" : "Sound off";
+    });
+  }
+  document.addEventListener("pointerdown", unlockSound, true);
+  document.addEventListener("keydown", unlockSound, true);
 
   // ---------- frame ----------
   let t = 0, playing = false, titled = true, raf = 0, last = performance.now(), idle = 0, done = false, captionIdx = -1;
@@ -586,6 +602,7 @@ export function playIntro({ onDone, mapRect } = {}) {
     if (score) p ? score.start(t) : score.stop();
   }
   function begin() {
+    if (!titled) return;
     titled = false;
     root.classList.remove("titled");
     playing = true;
@@ -606,6 +623,9 @@ export function playIntro({ onDone, mapRect } = {}) {
     root.classList.add("gone");
     window.removeEventListener("resize", resize);
     document.removeEventListener("keydown", onKey);
+    document.removeEventListener("pointerdown", unlockSound, true);
+    document.removeEventListener("keydown", unlockSound, true);
+    clearTimeout(autoTimer);
     if (score) score.close();
     onDone && onDone();
     setTimeout(() => { composer.dispose(); renderer.dispose(); root.remove(); }, 900);
@@ -629,6 +649,8 @@ export function playIntro({ onDone, mapRect } = {}) {
   $(".intro-skip").onclick = finish;
   document.addEventListener("keydown", onKey);
   $(".intro-begin").focus();
+  // start on its own after a moment on the title screen (Begin starts it straight away)
+  const autoTimer = autoplay ? setTimeout(() => { if (titled && !done) begin(); }, 3200) : 0;
   raf = requestAnimationFrame(frame);
 
   return { finish, seek, begin, setPlaying, get time() { return t; } };
