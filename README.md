@@ -48,6 +48,21 @@ At the end, the Mars globe turns past famous places, then **unrolls into the fla
 - CTX Jezero DTM, 20 m/px. This is the USGS Mars 2020 landing-navigation product, with coverage shown as a green dashed box on the map.
 - MGS MOLA MEGDR, about 3.7 km/px, everywhere else.
 
+**Directions (from → stops → to):** works like a maps app. A start or destination can be your position, a landing site, any of the 2,052 IAU-named places, typed coordinates (`-4.6, 137.4`), or a point chosen on the map. Stops can be added in between, and ⇅ swaps the ends. Every site, search result and dropped pin offers *Directions to here*, *Start from here*, *Add as stop* and *Ground view*. Points chosen on the map are named after the feature they're in, e.g. "Inside Jezero".
+
+**Astronaut & suit:** the astronaut enters current readings: oxygen %, battery %, cooling water %, CO₂-scrubber hours, body mass, carried load, how they feel (fresh / normal / tired), heart rate and the safety reserve to keep. For every 200 m step the app estimates metabolic power from walking speed and slope, using the Pandolf (1977) load-carriage equation scaled to Mars gravity (0.38 g), with a pressurised-suit factor. It turns that power into:
+- **Oxygen:** 20.1 kJ of energy per litre of O₂ burned
+- **CO₂ scrubber:** hours of capacity used, scaled to effort
+- **Cooling water:** water evaporated to remove body heat
+- **Battery:** a steady draw for fans, pumps and radio
+
+The route summary shows the share of each supply the walk uses and names the **limiting supply**. Each stop shows the oxygen left on arrival. During live guidance, **Update readings** re-baselines from the real gauges, and the turn-back alert checks every supply, including the slower use while you're stopped. Suit capacities default to ISS-EMU figures (e.g. 0.54 kg primary O₂) and can be changed in `frontend/suit.js` for a Mars suit design.
+
+**Ground view (Street View for Mars):**
+- **Rover photos:** finds the nearest Perseverance or Curiosity stop within 3 km (from NASA's MMGIS rover-traverse data). It lays out that stop's Navcam frames around 360° by the mast azimuth and elevation recorded with each frame (NASA raw-image APIs). Drag to look around, scroll to zoom, and click a frame for full size. This covers Jezero (Perseverance) and Gale (Curiosity).
+- **3D terrain:** the sharpest elevation model (CTX DTM 20 m in Jezero, MOLA elsewhere) draped with Mars Trek imagery (HiRISE 25 cm, CTX 6 m or Viking), with a Mars sky and the sun placed for your departure time. You can view it from overhead or **stand there at eye level**, with a *Relief ×3* toggle.
+- **Walk it in 3D:** fly along the planned route by drone, at eye level or in free look, with the path coloured by slope and the A/B/C pins in place. A scrub bar shows distance, elevation, slope and the current instruction.
+
 **Your position (no GPS on Mars):**
 - **Search:** 2,052 official IAU place names (craters, mountains, valleys…). Choosing one flies the map there and opens a place card.
 - **Coordinates:** type them from the lander/rover navigation fix, e.g. `18.4447, 77.4508`, `4.59S 137.44E`, or 0–360°E.
@@ -90,12 +105,17 @@ At the end, the Mars globe turns past famous places, then **unrolls into the fla
 ## Structure
 
 ```
-backend/app.py       FastAPI: /api/sites, /api/places, /api/whereis, /api/elevation, /api/dem, /api/profile
+backend/app.py       FastAPI: /api/sites, /api/places, /api/whereis, /api/elevation, /api/dem, /api/profile,
+                     /api/rover/nearest, /api/rover/photos, /api/terrain/grid
 backend/places.py    IAU place-name search + "where am I" descriptions
+backend/rover.py     nearest rover stop + its Navcam photos (NASA MMGIS + raw-image APIs, cached)
 backend/terrain.py   DEM sampling (local DTMs -> MOLA), great-circle densify, legs/directions, slope/EVA model
 frontend/            Leaflet (EPSG:4326 + Trek tiles), Chart.js profile, Mars clock
 frontend/intro.js    3D opener (galaxy → solar system → Mars → globe unrolls into the map); textures in frontend/textures/
 frontend/score.js    the intro's synthesised soundtrack (Web Audio)
+frontend/directions.js  From → stops → To planner, search, choose-on-map, popup actions
+frontend/suit.js     astronaut & suit readings, metabolic/consumables model
+frontend/groundview.js  rover photos look-around, 3D terrain, 3D route walk (Three.js)
 frontend/navigate.js live guidance: route snapping, off-route, next turn, O2/turn-back, simulation
 data/                sites.json, MOLA grid + Jezero DTM (downloaded, git-ignored)
 scripts/fetch_data.py      downloads the elevation data

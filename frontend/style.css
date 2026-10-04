@@ -171,3 +171,107 @@ body.navigating #draw, body.navigating #undo, body.navigating #clear, body.navig
 body.navigating .leaflet-control-layers, body.navigating .leaflet-control-zoom { margin-top: 120px; }
 .nav-ctrl-row[hidden] { display: none; }
 .header-right { display: flex; align-items: center; gap: 14px; }
+
+/* ---------- directions (from → stops → to) ---------- */
+.dir { position: relative; display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.dir-row { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 8px; }
+.dir-row input { width: 100%; font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 10px; }
+.dir-row input:focus { outline: none; border-color: var(--route); }
+.dir-row input.need { border-color: var(--warn); box-shadow: 0 0 0 2px rgba(232,176,75,.25); }
+.dir-dot { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; }
+.dir-dot.from { background: #34a853; color: #fff; }
+.dir-dot.to { background: #ea4335; color: #fff; }
+.dir-dot.stop { background: #ece6e1; color: #111; }
+.dir-x { padding: 4px 8px; font-size: 13px; line-height: 1; }
+button.link { align-self: flex-start; background: none; border: 0; color: var(--route); padding: 2px 0 2px 30px; font-size: 13px; }
+button.link:hover { text-decoration: underline; }
+.dir .results { left: 30px; right: 0; }
+.result .ri { display: inline-block; width: 18px; color: var(--muted); }
+
+/* ---------- astronaut & suit ---------- */
+.suit-summary { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px; }
+.chip b { color: var(--text); font-weight: 600; }
+.chip.low { border-color: rgba(255,107,91,.6); }
+.chip.low b { color: var(--bad); }
+.suit-edit { margin-top: 10px; }
+.suit-edit summary { cursor: pointer; color: var(--route); font-size: 13px; }
+.suit-form { margin-top: 8px; display: grid; gap: 10px; }
+.suit-form fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px 10px; margin: 0; display: grid; gap: 6px; }
+.suit-form legend { font-size: 11px; color: var(--muted); padding: 0 4px; }
+.suit-form label { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+.suit-form label span { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.suit-form input, .suit-form select { width: 74px; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 6px; padding: 4px 6px; text-align: right; }
+.suit-form select { width: auto; text-align: left; }
+
+/* resource bars in the route summary */
+.res { margin-top: 12px; display: grid; gap: 5px; }
+.res-head, .res-foot { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+.res-foot { margin-top: 2px; }
+.res-row { display: grid; grid-template-columns: 96px 1fr 40px; align-items: center; gap: 8px; font-size: 12px; }
+.res-row.lim .res-name { color: var(--text); font-weight: 600; }
+.res-name { color: var(--muted); }
+.res-val { text-align: right; font-variant-numeric: tabular-nums; }
+.res-bar { position: relative; height: 8px; border-radius: 4px; background: #2a2320; overflow: hidden; }
+.res-bar .used { position: absolute; inset: 0 auto 0 0; border-radius: 4px; }
+.res-bar .keep { position: absolute; top: 0; bottom: 0; right: 0;
+  background: repeating-linear-gradient(45deg, rgba(255,255,255,.12) 0 3px, transparent 3px 6px); border-left: 1px solid rgba(255,255,255,.35); }
+.go-row { margin-top: 10px; display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+.go-row button.go { margin-top: 0; }
+button.go.alt { width: auto; background: var(--panel); border-color: var(--line); color: var(--text); }
+button.go.alt:hover { border-color: var(--accent); }
+
+/* actions inside site / place popups */
+.place-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.place-actions button, .place-pop > button { padding: 5px 8px; font-size: 12px; }
+.place-actions button.primary { background: var(--route); border-color: var(--route); color: #fff; font-weight: 600; }
+.nav-readings { position: absolute; left: 12px; bottom: 100px; z-index: 1100; width: 250px; display: grid; gap: 6px;
+  background: rgba(23,19,17,.97); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+.nav-readings label { display: flex; justify-content: space-between; align-items: center; }
+.nav-readings label span { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; }
+.nav-readings input, .nav-readings select { width: 64px; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
+.nav-readings select { width: auto; }
+.nav-readings .nav-btns button[type=submit] { background: var(--route); border-color: var(--route); color: #fff; font-weight: 600; }
+
+/* ---------- ground view ("Street View" for Mars) ---------- */
+#gv { position: fixed; inset: 0; z-index: 4000; background: #0b0908; display: grid; grid-template-rows: auto 1fr; color: var(--text); }
+.gv-head { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--bg); }
+.gv-name { flex: 1; min-width: 0; }
+.gv-title { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gv-sub { font-size: 12px; color: var(--muted); }
+.gv-tabs { display: flex; gap: 4px; }
+.gv-tabs button[aria-selected="true"] { background: var(--route); border-color: var(--route); color: #fff; }
+.gv-close { font-size: 16px; padding: 6px 10px; }
+.gv-body { position: relative; overflow: hidden; }
+.gv-msg { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; text-align: center; color: var(--muted); padding: 24px; line-height: 1.6; }
+.gv-alt { margin-top: 8px; }
+.gv-spin { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: gv-spin 0.9s linear infinite; }
+@keyframes gv-spin { to { transform: rotate(360deg); } }
+/* rover photo strip */
+.gv-strip-wrap { position: absolute; inset: 0 0 52px 0; overflow: hidden; cursor: grab; background: #120e0c; touch-action: none; }
+.gv-strip-wrap:active { cursor: grabbing; }
+.gv-strip { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.gv-strip img { position: absolute; object-fit: fill; user-select: none; -webkit-user-drag: none; box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
+.gv-strip img:hover { outline: 2px solid var(--route); z-index: 5; }
+.gv-compass { position: absolute; left: 0; right: 0; bottom: 30px; height: 20px; pointer-events: none; }
+.gv-compass span { position: absolute; transform: translateX(-50%); font-size: 11px; color: var(--muted); white-space: nowrap; }
+.gv-hint { position: absolute; left: 16px; bottom: 8px; font-size: 12px; color: var(--muted); }
+.gv-gallery { position: absolute; inset: 0; overflow: auto; padding: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.gv-gallery img { width: 100%; border-radius: 6px; cursor: zoom-in; }
+.gv-lightbox { position: absolute; inset: 0; z-index: 20; background: rgba(0,0,0,.92); display: grid; place-items: center; padding: 48px 24px 64px; }
+.gv-lightbox img { max-width: 100%; max-height: 100%; }
+.gv-lightbox .gv-cap { position: absolute; bottom: 16px; left: 24px; right: 24px; font-size: 12px; color: var(--muted); text-align: center; }
+.gv-lightbox .gv-cap a { color: var(--route); }
+.gv-lightbox .gv-close { position: absolute; top: 12px; right: 16px; }
+/* 3D view */
+.gv-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.gv-hud { position: absolute; left: 16px; right: 16px; bottom: 34px; display: grid; gap: 6px; max-width: 760px; }
+.gv-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: rgba(13,11,10,.82); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; }
+.gv-row button[aria-pressed="true"] { background: var(--route); border-color: var(--route); color: #fff; }
+.gv-scrub { flex: 1; min-width: 160px; accent-color: var(--route); }
+.gv-info { font-size: 12px; color: var(--text); font-variant-numeric: tabular-nums; }
+.gv-note { position: absolute; left: 16px; bottom: 8px; font-size: 11px; color: rgba(236,230,225,.75); text-shadow: 0 1px 2px #000; }
+.step-view, .me-view { margin-top: 6px; padding: 3px 8px; font-size: 11px; }
+.gv-row select { width: auto; }

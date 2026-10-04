@@ -55,12 +55,18 @@ fetch("/api/sites").then((r) => r.json()).then(({ sites }) => {
   const sel = $("site-select");
   for (const s of sites) {
     const color = s.type === "lander" ? "#5ec4d6" : "#e8b04b";
-    L.circleMarker([s.lat, s.lon], { radius: 6, color, weight: 2, fillOpacity: 0.35 })
-      .bindPopup(`<b>${s.name}</b><br>${s.region}${s.mission ? ` · ${s.mission} (${s.year})` : ""}` +
-        `${s.why ? `<br><span style="color:#9a8f88">${s.why}</span>` : ""}` +
-        `<br><small>${s.lat.toFixed(4)}°, ${s.lon.toFixed(4)}°E</small>`)
+    const mk = L.circleMarker([s.lat, s.lon], { radius: 6, color, weight: 2, fillOpacity: 0.35 })
       .on("click", () => updateConditions(s.lat, s.lon, s.name))
       .addTo(sitesLayer);
+    mk.bindPopup(() => {
+      const box = document.createElement("div");
+      box.className = "place-pop";
+      box.innerHTML = `<div class="pn">${s.name}</div><div class="pm">${s.region}${s.mission ? ` · ${s.mission} (${s.year})` : ""}` +
+        `${s.why ? `<br>${s.why}` : ""}<br>${s.lat.toFixed(4)}°, ${s.lon.toFixed(4)}°E</div>`;
+      box.appendChild(Dir.actions([s.lat, s.lon], s.name, { close: () => mk.closePopup() }));
+      if (typeof GroundView !== "undefined") box.appendChild(GroundView.button(s.lat, s.lon, s.name));
+      return box;
+    });
     const o = document.createElement("option");
     o.value = s.id; o.textContent = `${s.type === "lander" ? "●" : "◆"} ${s.name}`;
     o.dataset.lat = s.lat; o.dataset.lon = s.lon;
@@ -98,7 +104,7 @@ map.on("mousemove", (e) => {
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const MARS_HOUR = 1.0274912517; // Earth hours in one Mars "hour" (1/24 sol); walk times are Earth hours
 const ROUTE = "#4f8cff", AMBER = "#f9ab00", RED = "#ea4335";
-let drawing = false, waypoints = [], lastProfile = null, lastLabels = [], chart = null, analyseToken = 0;
+let drawing = false, waypoints = [], wpNames = [], lastProfile = null, lastLabels = [], lastNames = [], chart = null, analyseToken = 0;
 const highlightLayer = L.layerGroup().addTo(map);
 const hoverDot = L.circleMarker([0, 0], { radius: 7, color: "#fff", weight: 2, fillColor: ROUTE, fillOpacity: 1, interactive: false });
 
@@ -156,8 +162,8 @@ function setDrawing(on) {
   if (!on && waypoints.length > 1) map.fitBounds(L.latLngBounds(waypoints).pad(0.3), { maxZoom: 15 });
 }
 $("draw").onclick = () => setDrawing(!drawing);
-$("undo").onclick = () => { waypoints.pop(); redrawRoute(); };
-$("clear").onclick = () => { waypoints = []; setDrawing(false); redrawRoute(); };
+$("undo").onclick = () => { waypoints.pop(); wpNames.length = waypoints.length; redrawRoute(); };
+$("clear").onclick = () => { waypoints = []; wpNames = []; setDrawing(false); redrawRoute(); if (typeof Dir !== "undefined") Dir.clear(); };
 $("export").onclick = exportGeoJSON;
 $("roundtrip").onchange = () => redrawRoute();
 $("depart").oninput = () => lastProfile && renderPanel(lastProfile, lastLabels);
@@ -169,6 +175,7 @@ document.addEventListener("keydown", (e) => {
 map.on("click", (e) => {
   if (!drawing) return;
   waypoints.push([e.latlng.lat, e.latlng.lng]);
+  wpNames.push(null);
   updateBanner();
   redrawRoute();
 });
@@ -177,12 +184,14 @@ function drawPins() {
   waypoints.forEach((p, i) => {
     const kind = i === 0 ? "start" : i === waypoints.length - 1 && waypoints.length > 1 ? "end" : "mid";
     const m = L.marker(p, { draggable: true, icon: pinIcon(letter(i), kind), zIndexOffset: 1000 });
-    m.on("dragend", () => { const ll = m.getLatLng(); waypoints[i] = [ll.lat, ll.lng]; redrawRoute(); });
+    m.on("dragend", () => { const ll = m.getLatLng(); waypoints[i] = [ll.lat, ll.lng]; wpNames[i] = null; redrawRoute(); });
     m.addTo(routeLayer);
   });
 }
 
 function redrawRoute() {
+  wpNames.length = waypoints.length;
+  if (typeof Dir !== "undefined") Dir.render();
   routeLayer.clearLayers();
   highlightLayer.clearLayers();
   drawPins();
@@ -205,6 +214,7 @@ async function analyse() {
   const round = $("roundtrip").checked;
   const pts = round ? [...waypoints, ...waypoints.slice(0, -1).reverse()] : [...waypoints];
   const labels = pts.map((_, j) => (j < n ? letter(j) : letter(n - 2 - (j - n))));
+  const names = pts.map((_, j) => stopName(j < n ? j : n - 2 - (j - n)));
   const r = await fetch("/api/profile", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ waypoints: pts, step_m: 50 }),
@@ -212,12 +222,12 @@ async function analyse() {
   if (token !== analyseToken) return; // a newer edit superseded this request
   if (!r.ok) { $("directions").textContent = "Elevation data unavailable — run scripts/fetch_data.py"; return; }
   const p = await r.json();
-  lastProfile = p; lastLabels = labels;
+  lastProfile = p; lastLabels = labels; lastNames = names;
   drawRoute(p, n - 1);
   renderPanel(p, labels);
   drawProfile(p, labels);
   const end = waypoints[n - 1];
-  updateConditions(end[0], end[1], `Stop ${letter(n - 1)} (destination)`);
+  updateConditions(end[0], end[1], `${letter(n - 1)}: ${stopName(n - 1)}`);
 }
 
 // ---------- map rendering ----------
@@ -239,7 +249,7 @@ function drawRoute(p, outboundLegs) {
   for (const leg of p.legs.slice(0, outboundLegs)) {
     const mid = p.samples[Math.round((leg.from_idx + leg.to_idx) / 2)];
     L.circleMarker([mid.lat, mid.lon], { radius: 1, opacity: 0, fillOpacity: 0, interactive: false })
-      .bindTooltip(`${fmtKm(leg.distance_km)} · ${fmtDur(leg.walk_hours)}`, { permanent: true, direction: "center", className: "leg-label" })
+      .bindTooltip(`${fmtKm(leg.distance_km)} · ${fmtDur(leg.walk_hours / Suit.pace())}`, { permanent: true, direction: "center", className: "leg-label" })
       .addTo(routeLayer);
   }
   drawPins();
@@ -253,20 +263,27 @@ function highlightLeg(leg) {
 }
 
 // ---------- side panel ----------
+const stopName = (i) => (wpNames[i] || (waypoints[i] ? fmtLatLon(waypoints[i][0], waypoints[i][1]) : ""));
+
 function renderPanel(p, labels) {
   const s = p.stats;
+  const names = lastNames;
   const [hh, mm] = ($("depart").value || "09:00").split(":").map(Number);
   const dep = hh + mm / 60;
-  const finish = dep + s.walk_hours / MARS_HOUR;
-  const startLat = waypoints[0][0];
-  const day = daylight(startLat);
-  const reserve = s.o2_budget_hours - s.o2_usable_hours;
+  const tl = Suit.timeline(p);                 // walking time + consumables at every sample
+  const have = Suit.available();
+  const bud = Suit.budget(Suit.needsOf(tl), have);
+  const lim = bud.limiting;
+  const reservePct = Suit.state.reservePct;
+  const finish = dep + tl.hours / MARS_HOUR;
+  const day = daylight(waypoints[0][0]);
   const round = $("roundtrip").checked;
   const steep = p.legs.filter((l) => l.max_slope_deg > 8).length;
+  const pctLeft = (key, i) => Math.max(0, Math.round(((have[key] - tl[key][i]) / (key === "co2" ? 8 : Suit.CAP[{ o2: "o2Kg", battery: "batteryWh", water: "waterKg" }[key]])) * 100));
 
   let verdict, cls;
-  if (s.walk_hours > s.o2_usable_hours) {
-    cls = "no"; verdict = `✗ Too long for one EVA — ${fmtDur(s.walk_hours)} of walking but only ${s.o2_usable_hours} h of usable O₂. Remove a stop or plan a rover leg.`;
+  if (!bud.ok) {
+    cls = "no"; verdict = `✗ Not enough ${lim.name.toLowerCase()}: this walk needs ${lim.fmt(lim.need)} but only ${lim.fmt(lim.usable)} is usable after the ${reservePct}% reserve. Shorten the route, refill, or plan a rover leg.`;
   } else if (!day) {
     cls = "no"; verdict = "✗ Polar night at this latitude right now — no daylight for an EVA.";
   } else if (finish > day.set) {
@@ -274,25 +291,41 @@ function renderPanel(p, labels) {
   } else if (dep < day.rise) {
     cls = "warn"; verdict = `⚠ Departure is before sunrise (${MarsTime.hhmm(day.rise)}). Start later for light and warmth.`;
   } else if (p.hazards.length || steep) {
-    cls = "warn"; verdict = `⚠ Doable in one EVA, but ${p.hazards.length ? `${p.hazards.length} stretch(es) are steeper than 15°` : `${steep} leg(s) have moderate slopes`}. Check the highlighted sections.`;
+    cls = "warn"; verdict = `⚠ Supplies are fine, but ${p.hazards.length ? `${p.hazards.length} stretch(es) are steeper than 15°` : `${steep} leg(s) have moderate slopes`}. Check the highlighted sections.`;
   } else {
-    cls = "ok"; verdict = `✓ Safe single EVA — back by ${MarsTime.hhmm(finish)} local time with ${(s.o2_budget_hours - s.walk_hours).toFixed(1)} h of O₂ to spare.`;
+    cls = "ok"; verdict = `✓ Safe single EVA — back by ${clock(finish)}. Tightest supply: ${lim.name.toLowerCase()}, ${Math.round((1 - lim.frac) * 100)}% left at the end.`;
   }
+  if (Suit.state.heartRate > 160) verdict += `<br>♥ Heart rate ${Suit.state.heartRate} bpm is high — rest before setting out.`;
 
   $("howto").hidden = true;
   $("summary").hidden = false;
-  const usedPct = Math.min(100, (s.walk_hours / s.o2_budget_hours) * 100);
+  const bars = bud.items.map((it) => {
+    const usedPct = Math.min(100, it.frac * 100), haveVsFull = it.avail;
+    const color = !it.ok ? RED : it === lim ? AMBER : ROUTE;
+    return `<div class="res-row${it === lim ? " lim" : ""}">
+      <span class="res-name">${it.name}</span>
+      <div class="res-bar" title="${it.name}: walk needs ${it.fmt(it.need)} of ${it.fmt(haveVsFull)} in the suit">
+        <div class="used" style="width:${usedPct}%;background:${color}"></div>
+        <div class="keep" style="left:${100 - reservePct}%"></div></div>
+      <span class="res-val">${it.avail > 0 ? `${Math.round(it.frac * 100)}%` : "empty"}</span></div>`;
+  }).join("");
   $("summary").innerHTML = `
-    <div class="big">${fmtDur(s.walk_hours)}<small>${fmtKm(s.distance_km)}${round ? " round trip" : ""}</small></div>
+    <div class="big">${fmtDur(tl.hours)}<small>${fmtKm(s.distance_km)}${round ? " round trip" : ""}</small></div>
+    <div class="sub">${names[0]} → ${names[waypoints.length - 1]}${round ? " and back" : ""}</div>
     <div class="sub">↑ ${s.ascent_m} m climb · ↓ ${s.descent_m} m descent · max slope ${s.max_slope_deg}°</div>
     <div class="sub">Depart ${MarsTime.hhmm(dep)} → finish ≈ ${clock(finish)} local solar time${day ? ` · daylight ${MarsTime.hhmm(day.rise)}–${MarsTime.hhmm(day.set)}` : ""}</div>
-    <div class="o2">
-      <div class="o2-bar"><div class="used" style="width:${usedPct}%;background:${s.walk_hours > s.o2_usable_hours ? RED : ROUTE}"></div><div class="reserve" style="width:${(reserve / s.o2_budget_hours) * 100}%"></div></div>
-      <div class="o2-legend"><span>O₂ used ${s.walk_hours.toFixed(1)} h</span><span>usable ${s.o2_usable_hours} h · reserve ${reserve.toFixed(1)} h</span></div>
+    <div class="res">
+      <div class="res-head"><span>Share of what's in the suit this walk uses</span><span>reserve ${reservePct}%</span></div>
+      ${bars}
+      <div class="res-foot">Effort ≈ ${Math.round(tl.avgW)} W average, ${Math.round(tl.peakW)} W peak · pace: ${Suit.state.condition} · carrying ${Suit.state.loadKg} kg</div>
     </div>
     <div class="verdict ${cls}">${verdict}</div>
-    <button id="nav-start" class="go">▶ Start Marswalk — live guidance</button>`;
+    <div class="row go-row">
+      <button id="nav-start" class="go">▶ Start Marswalk — live guidance</button>
+      <button id="walk-3d" class="go alt" title="Fly along the route at eye level">⛰ Walk it in 3D</button>
+    </div>`;
   $("nav-start").onclick = () => Nav.start();
+  $("walk-3d").onclick = () => (typeof GroundView !== "undefined" ? GroundView.walk() : null);
 
   // turn-by-turn
   const el = $("directions");
@@ -301,14 +334,16 @@ function renderPanel(p, labels) {
   const stop = (j, title, meta, extra, kind) => {
     const d = document.createElement("div");
     d.className = `step stop ${kind}`;
-    d.innerHTML = `<div class="icon">${labels[j]}</div><div><div class="title">${title}</div><div class="meta">${meta}</div>${extra}</div>`;
+    d.innerHTML = `<div class="icon">${labels[j]}</div><div><div class="title">${title}</div><div class="meta">${meta}</div>${extra}
+      <button type="button" class="step-view" title="Ground view at ${labels[j]}">👁 Ground view</button></div>`;
     const s0 = j === 0 ? p.samples[0] : p.samples[p.legs[j - 1].to_idx];
     d.onclick = () => { highlightLayer.clearLayers(); map.flyTo([s0.lat, s0.lon], Math.max(map.getZoom(), 14)); };
+    d.querySelector(".step-view").onclick = (ev) => { ev.stopPropagation(); GroundView.at(s0.lat, s0.lon, `${labels[j]}: ${names[j]}`); };
     el.appendChild(d);
   };
 
   const s0 = p.samples[0];
-  stop(0, `Start at ${labels[0]}`, `Depart ${MarsTime.hhmm(dep)} local solar time · elevation ${Math.round(s0.elev_m)} m · O₂ ${s.o2_budget_hours} h`,
+  stop(0, `Start at ${labels[0]}: ${names[0]}`, `Depart ${MarsTime.hhmm(dep)} local solar time · elevation ${Math.round(s0.elev_m)} m · O₂ ${Suit.state.o2Pct}%`,
     day && dep < day.rise ? `<div class="warn">⚠ Sun not up yet (rises ${MarsTime.hhmm(day.rise)})</div>` : "", "start");
 
   p.legs.forEach((leg, i) => {
@@ -323,10 +358,11 @@ function renderPanel(p, labels) {
     let warn = "";
     if (leg.hazard_points) warn += `<div class="bad">⚠ ${leg.hazard_points} stretch(es) steeper than 15° — find a way around, don't climb straight up.</div>`;
     else if (leg.slope_class === "moderate") warn += `<div class="warn">Moderate slopes up to ${leg.max_slope_deg}° — slow down, watch your footing.</div>`;
+    const legH = tl.t[leg.to_idx] - tl.t[leg.from_idx];
     row.innerHTML = `<div class="icon">${TURN_ICON[leg.instruction] || "↑"}</div><div>
       <div class="title">${leg.instruction} ${compassWord(leg.compass)} for ${fmtKm(leg.distance_km)}</div>
       <div class="meta">${leg.terrain}</div>
-      <div class="meta">↑ ${leg.ascent_m} m · ↓ ${leg.descent_m} m · about ${fmtDur(leg.walk_hours)} on foot</div>${warn}</div>`;
+      <div class="meta">↑ ${leg.ascent_m} m · ↓ ${leg.descent_m} m · about ${fmtDur(legH)} on foot · uses ${((tl.o2[leg.to_idx] - tl.o2[leg.from_idx]) * 1000).toFixed(0)} g O₂</div>${warn}</div>`;
     row.onclick = () => {
       el.querySelectorAll(".step").forEach((x) => x.classList.remove("active"));
       row.classList.add("active");
@@ -336,19 +372,21 @@ function renderPanel(p, labels) {
 
     const j = i + 1;
     const end = p.samples[leg.to_idx];
-    const arrive = dep + leg.cum_hours / MARS_HOUR;
-    const o2Left = s.o2_budget_hours - leg.cum_hours;
+    const arrive = dep + tl.t[leg.to_idx] / MARS_HOUR;
     const sun = sunElevation(end.lat, arrive);
     const last = j === p.legs.length;
-    const title = last ? (round ? `Back at ${labels[j]} — EVA complete` : `Arrive at ${labels[j]} — destination`)
-      : round && j === outbound ? `Reach ${labels[j]} — turnaround point` : `Arrive at ${labels[j]}`;
+    const title = last ? (round ? `Back at ${labels[j]}: ${names[j]} — EVA complete` : `Arrive at ${labels[j]}: ${names[j]}`)
+      : round && j === outbound ? `Reach ${labels[j]}: ${names[j]} — turnaround point` : `Arrive at ${labels[j]}: ${names[j]}`;
     let extra = "";
-    if (o2Left < 0) extra += `<div class="bad">✗ Out of O₂ before reaching this point.</div>`;
-    else if (o2Left < reserve) extra += `<div class="bad">⚠ Into the O₂ reserve (${o2Left.toFixed(1)} h left).</div>`;
+    for (const it of bud.items) {
+      const left = it.avail - tl[it.key][leg.to_idx];
+      if (left < 0) { extra += `<div class="bad">✗ ${it.name} runs out before this point.</div>`; break; }
+      if (left < it.avail - it.usable) { extra += `<div class="bad">⚠ Into the ${it.name.toLowerCase()} reserve here.</div>`; break; }
+    }
     if (sun < 0) extra += `<div class="bad">☾ After sunset — dark and very cold.</div>`;
     else if (sun < 10) extra += `<div class="warn">Sun low (${sun.toFixed(0)}°) — long shadows hide obstacles.</div>`;
     stop(j, title,
-      `≈ ${clock(arrive)} local · ${fmtKm(leg.cum_km)} walked · elevation ${Math.round(end.elev_m)} m · O₂ left ${Math.max(0, o2Left).toFixed(1)} h · sun ${sun.toFixed(0)}°`,
+      `≈ ${clock(arrive)} local · ${fmtKm(leg.cum_km)} walked · elevation ${Math.round(end.elev_m)} m · O₂ ${pctLeft("o2", leg.to_idx)}% · sun ${sun.toFixed(0)}°`,
       extra, last ? (round ? "start" : "end") : "mid");
   });
 
@@ -359,6 +397,8 @@ function renderPanel(p, labels) {
     : "High-resolution terrain: crater walls and scarps are captured; individual boulders are not. ") +
     "Walk times use Tobler's hiking formula slowed for a pressurised suit.";
 }
+
+Suit.onChange(() => { if (lastProfile) { renderPanel(lastProfile, lastLabels); drawRoute(lastProfile, waypoints.length - 1); } });
 
 // ---------- elevation profile ----------
 function drawProfile(p, labels) {
@@ -483,7 +523,9 @@ async function setMe(lat, lon, { fly = true, save = true } = {}) {
   if (!w || me[0] !== lat || me[1] !== lon) return;
   $("me-card").innerHTML = `<div class="where">${w.summary}</div>
     <div class="muted">${fmtLatLon(lat, lon)}${w.elev_m !== undefined ? ` · ${Math.round(w.elev_m)} m` : ""}</div>
-    ${w.elev_source ? `<div class="muted">Terrain data: ${w.elev_source}</div>` : ""}`;
+    ${w.elev_source ? `<div class="muted">Terrain data: ${w.elev_source}</div>` : ""}
+    <button type="button" class="me-view">👁 Ground view from here</button>`;
+  $("me-card").querySelector(".me-view").onclick = () => GroundView.at(lat, lon, "Your position");
 }
 
 $("pick-me").onclick = () => {
@@ -505,17 +547,13 @@ map.on("click", (e) => {
 $("center-me").onclick = () => me && map.flyTo(me, Math.max(map.getZoom(), 12));
 $("start-here").onclick = () => {
   if (!me) return;
-  waypoints = [[...me]];
-  redrawRoute();
-  setDrawing(true); // next clicks add B, C…
+  Dir.setFrom([...me], "Your position"); // then choose where to go
 };
 
-function routeFromMe(lat, lon) {
+function routeFromMe(lat, lon, name = null) {
   if (!me) return;
-  waypoints = [[...me], [lat, lon]];
-  setDrawing(false);
-  redrawRoute();
-  map.fitBounds(L.latLngBounds(waypoints).pad(0.3), { maxZoom: 15 });
+  waypoints = [[...me]]; wpNames = ["Your position"];
+  Dir.setTo([lat, lon], name);
 }
 
 // ----- place card (search result, typed coordinates, or right-click) -----
@@ -527,8 +565,9 @@ async function showPlace(lat, lon, title, meta, zoom) {
   box.innerHTML = `<div class="pn">${title}</div><div class="pm">${meta || ""}${meta ? "<br>" : ""}${fmtLatLon(lat, lon)}<span class="pw"></span></div>`;
   const btn = (label, fn) => { const b = document.createElement("button"); b.textContent = label; b.onclick = () => { map.closePopup(); fn(); }; box.appendChild(b); };
   btn("📍 I'm here", () => { searchLayer.clearLayers(); setMe(lat, lon, { fly: false }); });
-  if (me) btn("🧭 Directions from me", () => { searchLayer.clearLayers(); routeFromMe(lat, lon); });
-  btn("➕ Add as stop", () => { waypoints.push([lat, lon]); redrawRoute(); });
+  const placeName = title === "Dropped pin" || title === "Coordinates" ? null : title;
+  box.appendChild(Dir.actions([lat, lon], placeName, { close: () => { map.closePopup(); searchLayer.clearLayers(); } }));
+  box.appendChild(GroundView.button(lat, lon, placeName || "Dropped pin"));
   pin.bindPopup(box, { className: "", maxWidth: 260 });
   if (zoom !== undefined) map.flyTo([lat, lon], zoom);
   pin.openPopup();

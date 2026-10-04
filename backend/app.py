@@ -5,10 +5,12 @@ import json
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import places
+import rover
 import terrain
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -45,6 +47,42 @@ def whereis(lat: float, lon: float):
     except FileNotFoundError:
         pass
     return out
+
+
+@app.get("/api/rover/nearest")
+def rover_nearest(lat: float, lon: float, max_km: float = 3.0):
+    """Nearest Perseverance/Curiosity stop to a point (within max_km), or null."""
+    return rover.nearest(lat, lon, max_km)
+
+
+@app.get("/api/rover/photos")
+def rover_photos(mission: str, sol: int, site: int | None = None, drive: int | None = None):
+    """Rover photos (Navcam) taken on a sol, preferring frames from the given stop."""
+    if mission not in rover.MISSIONS:
+        raise HTTPException(400, "mission must be m2020 or msl")
+    try:
+        return rover.photos(mission, sol, site, drive)
+    except Exception as e:
+        raise HTTPException(502, f"NASA raw-image service unavailable: {e}")
+
+
+@app.get("/api/terrain/grid")
+def terrain_grid(s: float, w: float, n: float, e: float, nx: int = 160, ny: int = 160):
+    """Elevation grid (metres, float32, row 0 = north) for the 3D view, from the sharpest DEM."""
+    nx, ny = max(2, min(nx, 320)), max(2, min(ny, 320))
+    import numpy as np
+    out = np.empty((ny, nx), dtype="<f4")
+    sources: dict[str, int] = {}
+    for j in range(ny):
+        lat = n - (n - s) * j / (ny - 1)
+        for i in range(nx):
+            z, src = terrain.elevation_src(lat, w + (e - w) * i / (nx - 1))
+            out[j, i] = z
+            sources[src] = sources.get(src, 0) + 1
+    main = max(sources, key=sources.get)
+    return Response(out.tobytes(), media_type="application/octet-stream",
+                    headers={"X-Nx": str(nx), "X-Ny": str(ny), "X-Source": main,
+                             "Access-Control-Expose-Headers": "X-Nx, X-Ny, X-Source"})
 
 
 @app.get("/api/dem")

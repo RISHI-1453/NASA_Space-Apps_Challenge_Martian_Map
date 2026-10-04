@@ -4,3 +4,4 @@ __pycache__/
 data/*.img
 data/*.tif
 data/*.part
+data/rover/

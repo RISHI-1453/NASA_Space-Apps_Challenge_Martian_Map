@@ -47,12 +47,14 @@ const Nav = (() => {
     const t = (along - cum[i]) / ((cum[i + 1] - cum[i]) || 1);
     return { i, t: Math.max(0, Math.min(1, t)), xy: [pts[i][0] + t * (pts[i + 1][0] - pts[i][0]), pts[i][1] + t * (pts[i + 1][1] - pts[i][1])] };
   }
-  const tAt = (along) => { const { i, t } = pointAt(along); const s = P.samples; return s[i].t_h + t * (s[i + 1].t_h - s[i].t_h); };
+  let TL = null, base = null; // suit timeline for this route; consumables at the last reading
+  const tAt = (along) => { const { i, t } = pointAt(along); return TL.t[i] + t * (TL.t[i + 1] - TL.t[i]); };
+  const usedAt = (along) => { const { i, t } = pointAt(along); return Object.fromEntries(Suit.RES.map((r) => [r.key, TL[r.key][i] + t * (TL[r.key][i + 1] - TL[r.key][i])])); };
+  function rebase() { base = { have: Suit.available(), at: usedAt(progress), t: tAt(progress), el: elapsed() }; }
   function alongAtTime(h) {
-    const s = P.samples;
     if (h <= 0) return 0;
-    for (let i = 0; i < s.length - 1; i++) {
-      if (s[i + 1].t_h >= h) return cum[i] + ((h - s[i].t_h) / ((s[i + 1].t_h - s[i].t_h) || 1)) * (cum[i + 1] - cum[i]);
+    for (let i = 0; i < TL.t.length - 1; i++) {
+      if (TL.t[i + 1] >= h) return cum[i] + ((h - TL.t[i]) / ((TL.t[i + 1] - TL.t[i]) || 1)) * (cum[i + 1] - cum[i]);
     }
     return cum[cum.length - 1];
   }
@@ -140,13 +142,19 @@ const Nav = (() => {
     const total = cum[cum.length - 1];
     const el = elapsed();
     const tPlan = tAt(progress);
-    const tRem = Math.max(0, P.stats.walk_hours - tPlan);
-    const o2Left = P.stats.o2_budget_hours - el;
-    const reserve = P.stats.o2_budget_hours - P.stats.o2_usable_hours;
+    const tRem = Math.max(0, TL.hours - tPlan);
+    // what's left: last reading − model use while walking − resting use while stopped or slower than plan
+    const now = usedAt(progress), idle = Math.max(0, (el - base.el) - (tPlan - base.t)), rest = Suit.rates(150);
+    const left = {}, needRest = {}, reserve = {};
+    for (const r of Suit.RES) {
+      left[r.key] = base.have[r.key] - (now[r.key] - base.at[r.key]) - rest[r.key] * idle;
+      needRest[r.key] = TL[r.key][TL.t.length - 1] - now[r.key];
+      reserve[r.key] = (Suit.FULL[r.key] * Suit.state.reservePct) / 100;
+    }
     const ltst = departLtst() + el / MARS_HOUR;
     const day = daylight(lat);
     const hazard = P.hazards.find((h) => h.dist_m > progress && h.dist_m <= progress + HAZARD_LOOKAHEAD_M);
-    lastState = { lat, lon, s, offRoute, next, total, el, tPlan, tRem, o2Left, reserve, ltst, day, hazard, snapLL };
+    lastState = { lat, lon, s, offRoute, next, total, el, tPlan, tRem, left, needRest, reserve, ltst, day, hazard, snapLL };
     render(lastState);
     if (follow) map.panTo([lat, lon], { animate: mode !== "sim" || simSpeed < 300 });
     if (next === -1 && arrived.has(stops.length - 1)) pauseSim();
@@ -154,7 +162,7 @@ const Nav = (() => {
 
   function render(st) {
     if (!st) return;
-    const { lat, lon, s, offRoute, next, total, el, tPlan, tRem, o2Left, reserve, ltst, day, hazard, snapLL } = st;
+    const { lat, lon, s, offRoute, next, total, el, tPlan, tRem, left, needRest, reserve, ltst, day, hazard, snapLL } = st;
     // --- top card: next maneuver ---
     let icon = "↑", big = "", line = "", sub = "";
     if (offRoute) {
@@ -179,8 +187,11 @@ const Nav = (() => {
 
     // --- alerts, most urgent first ---
     const alerts = [];
-    if (o2Left <= 0) alerts.push(["bad", "✗ O₂ budget exhausted — switch to emergency supply, return now"]);
-    else if (tRem > o2Left - reserve) alerts.push(["bad", `⚠ TURN BACK — ${fmtDur(tRem)} of walking left but only ${fmtDur(Math.max(0, o2Left - reserve))} of O₂ before reserve`]);
+    const empty = Suit.RES.find((r) => left[r.key] <= 0);
+    const short = Suit.RES.find((r) => needRest[r.key] > left[r.key] - reserve[r.key]);
+    if (empty) alerts.push(["bad", `✗ ${empty.name} exhausted — switch to the backup supply and head straight back`]);
+    else if (short) alerts.push(["bad", `⚠ TURN BACK — ${short.name.toLowerCase()}: the rest of the walk needs ${short.fmt(needRest[short.key])}, only ${short.fmt(Math.max(0, left[short.key] - reserve[short.key]))} usable`]);
+    if (+Suit.state.heartRate > 160) alerts.push(["warn", `♥ Heart rate ${Suit.state.heartRate} bpm — slow down and rest`]);
     if (wrongWayCount >= 2) alerts.push(["bad", "⚠ Wrong way — you're walking back along the route"]);
     if (hazard) alerts.push(["warn", `⚠ ${hazard.slope_deg}° slope in ${fmtKm((hazard.dist_m - progress) / 1000)} — slow down, look for a gentler line`]);
     if (day && ltst + tRem / MARS_HOUR > day.set) alerts.push(["warn", `☾ At this pace you finish after sunset (${MarsTime.hhmm(day.set)})`]);
@@ -196,17 +207,56 @@ const Nav = (() => {
         <div><b>${clock(eta)}</b><span>ETA (local)</span></div>
         <div><b>${fmtKm(Math.max(0, total - progress) / 1000)}</b><span>to go</span></div>
         <div><b>${fmtDur(tRem)}</b><span>walking left</span></div>
-        <div class="${o2Left - reserve < tRem ? "neg" : ""}"><b>${Math.max(0, o2Left).toFixed(1)} h</b><span>O₂ left</span></div>
+        <div class="${needRest.o2 > left.o2 - reserve.o2 ? "neg" : ""}"><b>${Math.max(0, Math.round((left.o2 / Suit.FULL.o2) * 100))}%</b><span>O₂ left</span></div>
+        <div class="${needRest.battery > left.battery - reserve.battery ? "neg" : ""}"><b>${Math.max(0, Math.round((left.battery / Suit.FULL.battery) * 100))}%</b><span>battery</span></div>
         <div><b>${fmtDur(el)}</b><span>EVA time</span></div>
       </div>
-      <div class="nav-btns">${follow ? "" : '<button id="nav-recenter">◎ Re-center</button>'}<button id="nav-end">End</button></div>`;
+      <div class="nav-btns">${follow ? "" : '<button id="nav-recenter">◎ Re-center</button>'}<button id="nav-readings">Update readings</button><button id="nav-view">👁 View</button><button id="nav-end">End</button></div>`;
     ui.bottom.querySelector("#nav-end").onclick = stop;
+    ui.bottom.querySelector("#nav-readings").onclick = () => openReadings(left);
+    ui.bottom.querySelector("#nav-view").onclick = () => typeof GroundView !== "undefined" && GroundView.at(lat, lon, "Your position");
     const rc = ui.bottom.querySelector("#nav-recenter");
     if (rc) rc.onclick = () => { follow = true; map.panTo([lat, lon]); render(lastState); };
 
     say(offRoute ? `Off route. Head ${compassWord(compass16(bearingTo([lat, lon], snapLL)))} to rejoin.`
       : alerts.length && alerts[0][0] === "bad" ? alerts[0][1] : line); // speak on changes only, not every metre
   }
+
+  // the astronaut reports suit gauges / how they feel; the plan re-baselines from these numbers
+  function openReadings(left) {
+    if (ui.readings) { ui.readings.remove(); delete ui.readings; return; }
+    const st0 = Suit.state, pct = (k) => Math.max(0, Math.round((left[k] / Suit.FULL[k]) * 100));
+    const d = document.createElement("form");
+    d.className = "nav-readings";
+    d.innerHTML = `<b>Suit readings now</b>
+      <label>Oxygen <span><input name="o2Pct" type="number" min="0" max="100" value="${pct("o2")}"> %</span></label>
+      <label>Battery <span><input name="batteryPct" type="number" min="0" max="100" value="${pct("battery")}"> %</span></label>
+      <label>Cooling water <span><input name="waterPct" type="number" min="0" max="100" value="${pct("water")}"> %</span></label>
+      <label>CO₂ scrubber <span><input name="co2Hours" type="number" min="0" max="12" step="0.1" value="${Math.max(0, left.co2).toFixed(1)}"> h</span></label>
+      <label>Heart rate <span><input name="heartRate" type="number" min="30" max="220" value="${st0.heartRate || ""}" placeholder="—"> bpm</span></label>
+      <label>Feeling <span><select name="condition">${["fresh", "normal", "tired"].map((c) => `<option ${c === st0.condition ? "selected" : ""}>${c}</option>`).join("")}</select></span></label>
+      <div class="nav-btns"><button type="submit">Save</button><button type="button" data-x>Cancel</button></div>`;
+    L.DomEvent.disableClickPropagation(d);
+    d.querySelector("[data-x]").onclick = () => { d.remove(); delete ui.readings; };
+    d.onsubmit = (e) => {
+      e.preventDefault();
+      const f = d.elements, num = (n) => (f[n].value === "" ? "" : +f[n].value);
+      d.remove(); delete ui.readings;
+      Suit.set({ o2Pct: num("o2Pct"), batteryPct: num("batteryPct"), waterPct: num("waterPct"), co2Hours: num("co2Hours"), heartRate: num("heartRate"), condition: f.condition.value });
+      toast("✓ Readings updated — plan recalculated");
+    };
+    map.getContainer().appendChild(d);
+    ui.readings = d;
+  }
+  // new readings or a change in pace: rebuild the timeline and carry on from here
+  Suit.onChange(() => {
+    if (!active) return;
+    const keepT = elapsed();
+    TL = Suit.timeline(P);
+    if (mode === "sim") simT = keepT;
+    rebase();
+    if (lastState) fix(lastState.lat, lastState.lon);
+  });
 
   function toast(text) {
     const t = document.createElement("div");
@@ -258,6 +308,8 @@ const Nav = (() => {
     arrived = new Set(); progress = 0; lastAlong = 0; wrongWayCount = 0;
     simT = 0; driftOff = 0; drift = false; follow = true; lastSaid = ""; fixCount = 0;
     startWall = Date.now();
+    TL = Suit.timeline(P);
+    rebase();
     if (drawing) setDrawing(false);
     active = true;
     document.body.classList.add("navigating");
