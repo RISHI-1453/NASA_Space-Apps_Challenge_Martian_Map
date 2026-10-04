@@ -102,6 +102,8 @@ const Suit = (() => {
       chip("cooling water", `${st.waterPct}%`, st.waterPct < 30) + chip("CO₂ scrubber", `${(+st.co2Hours).toFixed(1)} h`, st.co2Hours < 2) +
       chip("carrying", `${st.loadKg} kg`) + chip("feeling", st.condition) +
       (st.heartRate ? chip("heart rate", `${st.heartRate} bpm`, st.heartRate > 160) : "");
+    const dot = document.getElementById("tab-me-dot");
+    if (dot) dot.hidden = !(st.o2Pct < 40 || st.batteryPct < 30 || st.waterPct < 30 || st.co2Hours < 2 || st.heartRate > 160);
     const f = document.getElementById("suit-form");
     if (f && !f.contains(document.activeElement)) for (const [k, v] of Object.entries(st)) if (f.elements[k]) f.elements[k].value = v;
   }

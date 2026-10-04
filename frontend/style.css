@@ -279,3 +279,16 @@ button.go.alt:hover { border-color: var(--accent); }
 .nav-ctrl-col[hidden] { display: none; }
 .nav-ctrl #nav-tap.active { background: var(--route); border-color: var(--route); color: #fff; }
 .nav-ctrl #nav-coord input { flex: 1; min-width: 0; font: inherit; font-size: 12px; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
+
+/* ---------- side-panel tabs ---------- */
+#panel { padding-top: 0; }
+.panel-tabs { position: sticky; top: 0; z-index: 5; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px;
+  margin: 0 -16px; padding: 8px 12px 0; background: var(--bg); border-bottom: 1px solid var(--line); }
+.panel-tabs button { position: relative; background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+  padding: 8px 4px 9px; font-size: 13px; color: var(--muted); }
+.panel-tabs button:hover { color: var(--text); border-color: transparent; }
+.panel-tabs button[aria-selected="true"] { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
+.tab-dot { position: absolute; top: 7px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--bad); }
+#panel section[hidden] { display: none; }
+#panel section[data-tab] { border-bottom: 0; }
+#summary { scroll-margin-top: 52px; }

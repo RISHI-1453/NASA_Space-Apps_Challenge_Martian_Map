@@ -13,6 +13,7 @@ const Dir = (() => {
 
   // ---------- state changes ----------
   function apply() {
+    showTab("route");
     redrawRoute();
     render();
     if (waypoints.length > 1) map.fitBounds(L.latLngBounds(waypoints).pad(0.3), { maxZoom: 14 });

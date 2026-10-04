@@ -1,5 +1,14 @@
 // Martian Map frontend
 const $ = (id) => document.getElementById(id);
+
+// ---------- side-panel tabs: one section at a time, so nothing hides below the fold ----------
+function showTab(name) {
+  document.querySelectorAll("#panel section[data-tab]").forEach((sec) => { sec.hidden = sec.dataset.tab !== name; });
+  document.querySelectorAll(".panel-tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  try { localStorage.setItem("martianmap.tab", name); } catch {}
+}
+document.querySelectorAll(".panel-tabs button").forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
+showTab((() => { try { return localStorage.getItem("martianmap.tab") || "route"; } catch { return "route"; } })());
 const TREK = "https://trek.nasa.gov/tiles/Mars/EQ";
 const trek = (layer, ext, maxNativeZoom, extra = {}) =>
   L.tileLayer(`${TREK}/${layer}/1.0.0/default/default028mm/{z}/{y}/{x}.${ext}`, {
@@ -226,6 +235,10 @@ async function analyse() {
   drawRoute(p, n - 1);
   renderPanel(p, labels);
   drawProfile(p, labels);
+  if (!Nav.active) {
+    showTab("route");
+    requestAnimationFrame(() => $("summary").scrollIntoView({ block: "start", behavior: "smooth" }));
+  }
   const end = waypoints[n - 1];
   updateConditions(end[0], end[1], `${letter(n - 1)}: ${stopName(n - 1)}`);
 }
@@ -549,6 +562,7 @@ map.on("click", (e) => {
 $("center-me").onclick = () => me && map.flyTo(me, Math.max(map.getZoom(), 12));
 $("start-here").onclick = () => {
   if (!me) return;
+  showTab("route");
   Dir.setFrom([...me], "Your position"); // then choose where to go
 };
 

@@ -27,7 +27,13 @@
     <div id="map"></div>
 
     <aside id="panel">
-      <section>
+      <nav class="panel-tabs" role="tablist" aria-label="Panel sections">
+        <button type="button" role="tab" data-tab="route">Route</button>
+        <button type="button" role="tab" data-tab="me">Me &amp; suit<span class="tab-dot" id="tab-me-dot" hidden></span></button>
+        <button type="button" role="tab" data-tab="sites">Sites</button>
+        <button type="button" role="tab" data-tab="conditions">Conditions</button>
+      </nav>
+      <section data-tab="me">
         <h2>Your position</h2>
         <div class="search">
           <input id="place-q" type="search" autocomplete="off"
@@ -43,7 +49,7 @@
           type coordinates from your lander/rover nav fix, or pick a spot on the map.</div>
       </section>
 
-      <section>
+      <section data-tab="me">
         <h2>Astronaut &amp; suit</h2>
         <div id="suit-summary" class="suit-summary"></div>
         <details id="suit-edit" class="suit-edit">
@@ -72,7 +78,7 @@
         </details>
       </section>
 
-      <section>
+      <section data-tab="sites">
         <h2>Sites</h2>
         <select id="site-select"><option value="">Fly to a site…</option></select>
         <div class="legend">
@@ -81,7 +87,7 @@
         </div>
       </section>
 
-      <section>
+      <section data-tab="route">
         <h2>Marswalk planner</h2>
         <div class="dir" id="dir">
           <div class="dir-row"><span class="dir-dot from" id="dir-from-dot" aria-hidden="true"></span>
@@ -121,7 +127,7 @@
         </div>
       </section>
 
-      <section>
+      <section data-tab="conditions">
         <h2>Conditions at destination</h2>
         <div id="conditions" class="stats"></div>
         <p class="muted small">Sun and local time are computed (Mars24 algorithm). Weather, dust and
