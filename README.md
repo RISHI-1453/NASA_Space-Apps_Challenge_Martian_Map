@@ -51,7 +51,7 @@ At the end, the Mars globe turns past famous places, then **unrolls into the fla
 
 **Directions (from → stops → to):** works like a maps app. A start or destination can be your position, a landing site, any of the 2,052 IAU-named places, typed coordinates (`-4.6, 137.4`), or a point chosen on the map. Stops can be added in between, and ⇅ swaps the ends. Every site, search result and dropped pin offers *Directions to here*, *Start from here*, *Add as stop* and *Ground view*. Points chosen on the map are named after the feature they're in, e.g. "Inside Jezero".
 
-**Astronaut & suit:** the astronaut enters current readings: oxygen %, battery %, cooling water %, CO₂-scrubber hours, body mass, carried load, how they feel (fresh / normal / tired), heart rate and the safety reserve to keep. For every 200 m step the app estimates metabolic power from walking speed and slope, using the Pandolf (1977) load-carriage equation scaled to Mars gravity (0.38 g), with a pressurised-suit factor. It turns that power into:
+**Astronaut & suit:** the astronaut enters current readings: oxygen %, battery %, cooling water %, CO₂-scrubber hours, body mass, carried load, how they feel (fresh / normal / tired), heart rate and the safety reserve to keep. For every 50 m step the app estimates metabolic power from walking speed and slope with the Pandolf (1977) load-carriage equation. It then scales that to Mars gravity with the **measured** factor: walking at 0.38 g costs about 68% of walking on Earth, not 38% (Brown et al. 2018; Farley & McMahon 1992). A pressurised-suit factor goes on top. Typical walks average 230–360 W, matching Apollo lunar EVAs (229–352 W, Waligora et al. 1975). It turns that power into:
 - **Oxygen:** 20.1 kJ of energy per litre of O₂ burned
 - **CO₂ scrubber:** hours of capacity used, scaled to effort
 - **Cooling water:** water evaporated to remove body heat
@@ -87,6 +87,7 @@ The route summary shows the share of each supply the walk uses and names the **l
   - **📍 Tap my position:** one deliberate map tap. Ordinary map clicks are ignored.
   - **Typed coordinates.**
   - **Your position → I'm here.**
+  - **📐 Fix from two landmarks:** there's no compass on Mars, but the Sun's direction is known. The panel gives the Sun's bearing and where your shadow points; you measure bearings to two landmarks (route stops, landing sites, IAU-named craters within 80 km) and the app intersects the two sight lines. The accuracy estimate assumes 3° bearing error and accounts for the size of the landmark. This answers the disorientation problem Apollo 14 hit, without needing GPS.
 
   Each fix carries an accuracy (a tap is about 12 screen pixels at the current zoom), shown as a circle. *Off route* only triggers beyond that uncertainty, and *wrong way* needs three clearly backwards fixes. **Demo: simulate a walk** is opt-in (10–900×, optional drift).
 - **Snapping to the route:** each fix is matched to the nearest point on the planned route. It never jumps more than 100 m backwards, so an out-and-back route can't snap onto the return leg too early.
@@ -95,7 +96,17 @@ The route summary shows the share of each supply the walk uses and names the **l
 - **Alerts:** **TURN BACK** when the walking left exceeds the O₂ left before reserve, wrong way, a steep slope within 300 m, finishing after sunset, and falling behind plan.
 - **Bottom bar:** ETA (local solar time), distance to go, walking time left, O₂ left and EVA time. Arrival messages appear at each stop. The walked part of the route turns grey and your trail is drawn. Optional 🔊 voice guidance.
 
-**Mars clock:** Mars Sol Date, MTC, Ls (season), Mars Year; local true solar time, sun elevation and daylight window at the destination, using the Mars24 algorithm (`frontend/marstime.js`).
+**Mars clock:** Mars Sol Date, MTC, Ls (season), Mars Year; local true solar time, sun elevation and daylight window at the destination, using the Mars24 algorithm (`frontend/marstime.js`). Also shows the live **signal delay to Earth** (JPL orbital elements), with a warning near solar conjunction.
+
+**Research-backed (Science tab):** 41 peer-reviewed and NASA sources, gathered with a SciSpace literature search. Each figure the app shows carries a small numbered link to its source. The Science tab lists every source with what it found and where the app uses it (`frontend/science.js`).
+- **Route research check**, under every route summary:
+  - **Effort vs Apollo:** average power against the 229–352 W Apollo average. Peaks are flagged above the Apollo/Skylab maximum (581 W) or the Walkback-Test pace that overwhelmed suit cooling (≈ 700 W).
+  - **Radiation dose for the walk:** 0.64 mSv/day measured by Curiosity's RAD, up to 50% more near solar minimum. Includes an altitude note (thinner air on high ground means more dose) and context: Earth background, the ~660 mSv trip to Mars, and NASA's 600 mSv career limit.
+  - **Walk-back:** furthest distance from the start against the 10 km Apollo walk-home limit, drawn as a dashed ring. One-way routes also get a ⟲ **point of no return**: the last spot from which retracing your steps to A still fits your suit's supplies with the reserve intact (the SEXTANT walk-back idea).
+  - **Load:** suit plus pack against the 50%-of-body-mass limit for an 8-hour Mars walk (Wickman & Luna 1996).
+  - **Pace:** your pace against the optimal Mars walking speed (3.4 km/h, Cavagna 1998) and the walk-to-lope speed (Froude 0.5, Kram 1997).
+  - **Dust:** dust-devil season and hours (Cantor 2006, Greeley 2010, Ferri 2003), the Amazonis and Hellas hotspots (Conway 2025), and dust-storm season (Ls 180–360°).
+- **Hazards & resources here**, in Conditions: radiation by altitude, dust devils and storms, near-surface convection (MEDA), ground-ice likelihood by latitude (SWIM, mid-latitude ice, pole-facing slopes), and perchlorate and dust toxicity.
 
 ## Layers to add once challenge resources are live
 
@@ -103,16 +114,16 @@ The route summary shows the share of each supply the walk uses and names the **l
   The Jezero HiRISE DTM (1 m) exists too, but it's 1.8 GB.
 - **Imagery:** CTX global mosaic and HiRISE orthoimages (Trek layer names from the WMTS GetCapabilities).
 - **Mineralogy:** CRISM / OMEGA hydrated-mineral maps, for science stops.
-- **Subsurface ice:** SWIM (Subsurface Water Ice Mapping) consensus map, for ISRU.
-- **Conditions:** MEDA (Perseverance) / REMS (Curiosity) weather, MCS dust opacity, RAD radiation,
+- **Subsurface ice:** the SWIM ice-consistency map itself (3 km/px), replacing today's latitude-band note.
+- **Conditions:** live MEDA (Perseverance) / REMS (Curiosity) weather, MCS dust opacity, RAD dose by sol,
   TES/THEMIS thermal inertia (how loose the ground is underfoot).
 - **Science along the way:** auto-suggest stops where a route crosses mineral/ice/geology units.
 
 ## Structure
 
 ```
-backend/app.py       FastAPI: /api/sites, /api/places, /api/whereis, /api/elevation, /api/dem, /api/profile,
-                     /api/rover/nearest, /api/rover/photos, /api/terrain/grid
+backend/app.py       FastAPI: /api/sites, /api/places, /api/places/near, /api/whereis, /api/elevation, /api/dem,
+                     /api/profile, /api/rover/nearest, /api/rover/photos, /api/terrain/grid
 backend/places.py    IAU place-name search + "where am I" descriptions
 backend/globaldem.py 200 m global DEM via HTTP range reads (USGS HRSC/MOLA blend)
 backend/rover.py     nearest rover stop + its Navcam photos (NASA MMGIS + raw-image APIs, cached)
@@ -122,6 +133,7 @@ frontend/intro.js    3D opener (galaxy → solar system → Mars → globe unrol
 frontend/score.js    the intro's synthesised soundtrack (Web Audio)
 frontend/directions.js  From → stops → To planner, search, choose-on-map, popup actions
 frontend/suit.js     astronaut & suit readings, metabolic/consumables model
+frontend/science.js  the 41 cited sources, route research check, walk-back / point of no return, hazard notes
 frontend/groundview.js  rover photos look-around, 3D terrain, 3D route walk (Three.js)
 frontend/navigate.js live guidance: route snapping, off-route, next turn, O2/turn-back, simulation
 data/                sites.json, MOLA grid + Jezero DTM (downloaded, git-ignored)

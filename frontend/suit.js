@@ -2,8 +2,10 @@
 //
 // The astronaut reports consumables (O2, battery, cooling water, CO2 scrubber), body mass, what
 // they're carrying and how they feel. For every step of a route we estimate metabolic power with
-// the Pandolf et al. (1977) load-carriage equation, scaled to Mars gravity and a pressurised suit,
-// then turn power into O2, CO2-scrubber, cooling-water and battery use.
+// the Pandolf et al. (1977) load-carriage equation, then scale it to Mars gravity with a measured
+// factor (walking at 0.38 g costs ~68% of 1 g, not 38% — Brown et al. 2018; Farley & McMahon 1992)
+// and a pressurised-suit penalty, and turn power into O2, CO2-scrubber, cooling-water and battery
+// use. Averages land inside the 229–352 W Apollo crews averaged on the Moon (Waligora et al. 1975).
 // Capacities default to ISS-EMU-class figures; edit CAP for a Mars suit design.
 const Suit = (() => {
   const KEY = "martianmap.suit";
@@ -17,7 +19,7 @@ const Suit = (() => {
     systemsW: 45,     // fans, pumps, radio, lights
   };
   const PACE = { fresh: 1.0, normal: 0.9, tired: 0.75 };
-  const MARS_G = 3.721 / 9.807;
+  const MARS_WALK = 0.68;   // walking VO2 at 0.38 g ÷ at 1 g (Brown et al. 2018: 0.68 vs 1.00 L/min)
   const SUIT_PENALTY = 1.3; // extra effort of moving joints in a pressurised suit
   const TERRAIN = 1.3;      // Pandolf terrain factor for loose regolith
 
@@ -25,15 +27,18 @@ const Suit = (() => {
   function load() { try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { return {}; } }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch {} }
 
-  // metabolic power (W) walking at v m/s on a grade (%): Pandolf 1977, gravity-scaled
+  // metabolic power (W) walking at v m/s on a grade (%): Pandolf 1977 at 1 g, scaled to Mars
   function metabolicW(v, gradePct) {
     const W = st.bodyKg, L = CAP.suitKg + st.loadKg;
     const G = gradePct >= 0 ? gradePct : -gradePct * 0.3; // going downhill still costs a little
     const standing = 1.5 * W;
-    const carrying = 2.0 * (W + L) * (L / W) ** 2 * MARS_G;
-    const moving = TERRAIN * (W + L) * (1.5 * v * v + 0.35 * v * G) * MARS_G * SUIT_PENALTY;
-    return Math.min(900, Math.max(150, standing + carrying + moving));
+    const carrying = 2.0 * (W + L) * (L / W) ** 2;
+    const moving = TERRAIN * (W + L) * (1.5 * v * v + 0.35 * v * G) * SUIT_PENALTY;
+    return Math.min(900, Math.max(150, (standing + carrying + moving) * MARS_WALK));
   }
+  // walking speed (km/h) on a slope (rise/run): Tobler's hiking function slowed for a suit —
+  // the same formula the server uses for walk times (terrain.walking_speed_kmh)
+  const toblerKmh = (s) => 6 * Math.exp(-3.5 * Math.abs(s + 0.05)) * 0.35;
   const RATE = {
     o2: (w) => ((w * 3600) / 20100) * 1.429e-3,         // kg/h: 20.1 kJ per litre of O2, 1.429 g per litre
     co2: (w) => w / CAP.co2RatedW,                       // scrubber-hours per hour
@@ -85,6 +90,13 @@ const Suit = (() => {
   }
   const needsOf = (tl, i0 = 0, i1 = tl.t.length - 1) => Object.fromEntries(RES.map((r) => [r.key, tl[r.key][i1] - tl[r.key][i0]]));
 
+  // hours and consumables to walk d metres with a height change of dz (for walk-back estimates)
+  function stepCost(d, dz) {
+    const s = d > 0 ? dz / d : 0, dt = d / 1000 / toblerKmh(s) / pace();
+    const w = metabolicW(dt > 0 ? d / (dt * 3600) : 0, s * 100);
+    return { t: dt, ...Object.fromEntries(RES.map((r) => [r.key, RATE[r.key](w) * dt])) };
+  }
+
   // ---------- panel UI ----------
   const listeners = [];
   const onChange = (fn) => listeners.push(fn);
@@ -124,5 +136,5 @@ const Suit = (() => {
 
   const rates = (w) => Object.fromEntries(RES.map((r) => [r.key, RATE[r.key](w)])); // per hour at power w
   const FULL = { o2: CAP.o2Kg, co2: 8, battery: CAP.batteryWh, water: CAP.waterKg };       // a full suit
-  return { get state() { return st; }, CAP, FULL, RES, set, onChange, timeline, budget, needsOf, available, pace, metabolicW, rates };
+  return { get state() { return st; }, CAP, FULL, RES, set, onChange, timeline, budget, needsOf, stepCost, available, pace, metabolicW, rates };
 })();

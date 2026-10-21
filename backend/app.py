@@ -37,6 +37,12 @@ def places_search(q: str, limit: int = 8):
     return places.search(q, min(limit, 20))
 
 
+@app.get("/api/places/near")
+def places_near(lat: float, lon: float, max_km: float = 80, limit: int = 12):
+    """Named features near a point (nearest first) — landmarks for a bearings fix."""
+    return places.near(lat, lon, min(max_km, 500), min(limit, 50))
+
+
 @app.get("/api/whereis")
 def whereis(lat: float, lon: float):
     """Describe a position: containing/nearest named feature, plus its elevation."""

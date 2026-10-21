@@ -115,6 +115,9 @@ const MARS_HOUR = 1.0274912517; // Earth hours in one Mars "hour" (1/24 sol); wa
 const ROUTE = "#4f8cff", AMBER = "#f9ab00", RED = "#ea4335";
 let drawing = false, waypoints = [], wpNames = [], lastProfile = null, lastLabels = [], lastNames = [], chart = null, analyseToken = 0;
 const highlightLayer = L.layerGroup().addTo(map);
+const walkbackLayer = L.layerGroup().addTo(map); // 10 km walk-home ring + point of no return
+// Leaflet's EPSG4326 measures circles on an Earth-sized sphere; convert Mars metres to its metres
+const MARS_TO_LEAFLET_M = 6371000 / 3389500;
 const hoverDot = L.circleMarker([0, 0], { radius: 7, color: "#fff", weight: 2, fillColor: ROUTE, fillOpacity: 1, interactive: false });
 
 const letter = (i) => LETTERS[i] || `#${i + 1}`;
@@ -203,6 +206,7 @@ function redrawRoute() {
   if (typeof Dir !== "undefined") Dir.render();
   routeLayer.clearLayers();
   highlightLayer.clearLayers();
+  walkbackLayer.clearLayers();
   drawPins();
   if (waypoints.length < 2) {
     lastProfile = null;
@@ -330,6 +334,7 @@ function renderPanel(p, labels) {
   $("howto").hidden = true;
   $("summary").hidden = false;
   const rover = s.distance_km > 40; // far beyond walking range: suit figures would be meaningless
+  const sci = rover ? null : Science.routeCheck(p, tl, { round, depart: dep, finish, Ls: MarsTime.compute().Ls });
   const bars = rover ? "" : bud.items.map((it) => {
     const usedPct = Math.min(100, it.frac * 100), haveVsFull = it.avail;
     const color = !it.ok ? RED : it === lim ? AMBER : ROUTE;
@@ -354,7 +359,9 @@ function renderPanel(p, labels) {
     <div class="row go-row">
       <button id="nav-start" class="go">▶ Start Marswalk — live guidance</button>
       <button id="walk-3d" class="go alt" title="Fly along the route at eye level">⛰ Walk it in 3D</button>
-    </div>`;
+    </div>
+    ${sci ? sci.html : ""}`;
+  drawWalkback(p, sci);
   $("nav-start").onclick = () => Nav.start();
   if (rover) { $("nav-start").disabled = true; $("nav-start").title = "Live guidance is for walks on foot"; }
   $("walk-3d").onclick = () => (typeof GroundView !== "undefined" ? GroundView.walk() : null);
@@ -424,12 +431,27 @@ function renderPanel(p, labels) {
 
   const src = Object.entries(s.dem_sources || {}).map(([k, v]) => `${k} ${v}%`).join(" · ");
   const keys = Object.keys(s.dem_sources || {});
-  $("dem-note").textContent = `Terrain: ${src}. ` + (keys.some((k) => k.startsWith("MGS MOLA"))
+  $("dem-note").innerHTML = `Terrain: ${src}${Science.cite("fergason2018", "smith2001")}. ` + (keys.some((k) => k.startsWith("MGS MOLA"))
     ? "Parts of this route only have coarse MOLA heights (3.7 km) — big hills show up, cliffs and boulders may not. "
     : keys.some((k) => k.startsWith("HRSC"))
       ? "200 m terrain: hills and large crater walls show up; small scarps and boulders don't. "
       : "High-resolution terrain: crater walls and scarps are captured; individual boulders are not. ") +
-    "Walk times use Tobler's hiking formula slowed for a pressurised suit.";
+    `Walk times use Tobler's hiking formula slowed for a pressurised suit${Science.cite("tobler1993")}.`;
+}
+
+// the Apollo-era 10 km walk-home ring around the start, and where a one-way walk stops being reversible
+function drawWalkback(p, sci) {
+  walkbackLayer.clearLayers();
+  if (!sci) return;
+  const A = [p.samples[0].lat, p.samples[0].lon];
+  L.circle(A, { radius: 10000 * MARS_TO_LEAFLET_M, color: "#ece6e1", weight: 1.2, opacity: 0.55, dashArray: "4 8", fill: false, interactive: false })
+    .addTo(walkbackLayer);
+  if (sci.turnBack !== null && sci.turnBack < p.samples.length - 1) {
+    const s = p.samples[sci.turnBack];
+    L.marker([s.lat, s.lon], { icon: L.divIcon({ className: "tb-pin", html: "⟲", iconSize: [26, 26], iconAnchor: [13, 13] }), zIndexOffset: 900 })
+      .bindTooltip(`Point of no return — ${fmtKm(s.dist_m / 1000)} along. Past here you can't walk back to ${lastLabels[0]} with your reserve intact.`, { direction: "top" })
+      .addTo(walkbackLayer);
+  }
 }
 
 Suit.onChange(() => { if (lastProfile) { renderPanel(lastProfile, lastLabels); drawRoute(lastProfile, waypoints.length - 1); } });
@@ -680,6 +702,7 @@ function renderConditions() {
     const h = (Math.acos(cosH0) * 180) / Math.PI / 15;
     daylight = `${MarsTime.hhmm(12 - h)} – ${MarsTime.hhmm(12 + h)} LTST`;
   }
+  const comms = Science.commsNote();
   $("conditions").innerHTML = [
     ["Location", `<span style="font-size:13px">${label}</span>`],
     ["Local true solar time", MarsTime.hhmm(loc.ltst)],
@@ -687,9 +710,17 @@ function renderConditions() {
     ["Season (hemisphere)", MarsTime.season(t.Ls, lat)],
     ["Daylight window", `<span style="font-size:13px">${daylight}</span>`],
     ["Elevation", `<span id="cond-elev">…</span>`],
+    ["Signal delay to Earth", `<span style="font-size:13px">${comms.text}</span>`],
+    ["Radiation (surface)", `<span style="font-size:13px">≈ 0.64 mSv/day</span>`],
   ].map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+  const notes = (elev) => {
+    $("hazards").innerHTML = `<div class="sci-row"><span class="sci-ic">📡</span><div>${comms.note}</div></div>` + Science.placeNotes(lat, lon, elev, loc.ltst);
+  };
+  notes();
   fetch(`/api/elevation?lat=${lat}&lon=${lon}`).then((r) => r.ok && r.json()).then((d) => {
-    if (d && $("cond-elev")) $("cond-elev").textContent = `${Math.round(d.elev_m)} m`;
+    if (!d || condTarget.lat !== lat || condTarget.lon !== lon) return;
+    if ($("cond-elev")) $("cond-elev").textContent = `${Math.round(d.elev_m)} m`;
+    notes(d.elev_m);
   });
 }
 setInterval(renderConditions, 30000);

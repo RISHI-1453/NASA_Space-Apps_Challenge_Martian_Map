@@ -84,6 +84,7 @@ const Nav = (() => {
         <select id="nav-mode"><option value="manual">Nav fixes</option><option value="sim">Demo: simulate a walk</option></select></div>
       <div class="nav-ctrl-col" id="nav-man-row">
         <button id="nav-tap" type="button">📍 Tap my position on the map</button>
+        <button id="nav-lm" type="button" title="Measure bearings to two landmarks against the Sun">📐 Fix from two landmarks</button>
         <form id="nav-coord" class="nav-ctrl-row"><input id="nav-coord-in" placeholder="or type lat, lon" aria-label="Nav fix coordinates" autocomplete="off"><button type="submit">Go</button></form>
         <span class="muted small" id="nav-lastfix">Starting at A. Report your position as you walk.</span>
       </div>
@@ -101,6 +102,7 @@ const Nav = (() => {
     ui.ctrl.querySelector("#nav-drift").onchange = (e) => { drift = e.target.checked; };
     ui.ctrl.querySelector("#nav-voice").onchange = (e) => { voice = e.target.checked; lastSaid = ""; };
     ui.ctrl.querySelector("#nav-tap").onclick = () => armTap(!tapArmed);
+    ui.ctrl.querySelector("#nav-lm").onclick = openLandmarks;
     ui.ctrl.querySelector("#nav-coord").onsubmit = (e) => {
       e.preventDefault();
       const c = parseCoords(ui.ctrl.querySelector("#nav-coord-in").value || "");
@@ -131,11 +133,12 @@ const Nav = (() => {
     lastAlong = along;
     // off route only when the gap is bigger than the fix could be wrong by
     const offRoute = s.d > Math.max(OFF_ROUTE_M, 2.5 * acc);
-    accCircle.setLatLng([lat, lon]).setRadius(acc);
+    accCircle.setLatLng([lat, lon]).setRadius(acc * MARS_TO_LEAFLET_M);
     if (acc > 8 && !layer.hasLayer(accCircle)) accCircle.addTo(layer);
     if (acc <= 8) accCircle.remove();
     const lf = document.getElementById("nav-lastfix");
-    if (lf && how !== "refresh" && how !== "sim") lf.textContent = `Last fix (${how === "tap" ? "map tap" : how === "typed" ? "typed" : how === "start" ? "route start" : "position"}): ${fmtLatLon(lat, lon)} ±${Math.round(acc)} m`;
+    const HOW = { tap: "map tap", typed: "typed", start: "route start", landmarks: "two landmarks" };
+    if (lf && how !== "refresh" && how !== "sim") lf.textContent = `Last fix (${HOW[how] || "position"}): ${fmtLatLon(lat, lon)} ±${Math.round(acc)} m`;
     if (!offRoute) progress = Math.max(progress, along);
 
     trail.addLatLng([lat, lon]);
@@ -276,6 +279,75 @@ const Nav = (() => {
     if (lastState) fix(lastState.lat, lastState.lon, lastState.acc, "refresh");
   });
 
+  // ---- two-landmark fix (resection) ----
+  // No GPS and no working compass on Mars, but the Sun's direction is known at every moment, so
+  // the astronaut measures bearings to two landmarks they can see and we intersect the two sight lines.
+  const BEARING_ERR = 3 * RAD; // a careful sun-referenced bearing by eye
+  function resect(A, thA, B, thB) {
+    const [ax, ay] = toXY(...A), [bx, by] = toXY(...B);
+    const ua = [Math.sin(thA * RAD), Math.cos(thA * RAD)], ub = [Math.sin(thB * RAD), Math.cos(thB * RAD)];
+    // you + ta·ua = A and you + tb·ub = B  →  ta·ua − tb·ub = A − B
+    const det = ub[0] * ua[1] - ua[0] * ub[1];
+    if (Math.abs(det) < Math.sin(20 * RAD)) return { err: "The two sight lines are too close to parallel — pick landmarks in more different directions (ideally 60–120° apart)." };
+    const dx = ax - bx, dy = ay - by;
+    const ta = (ub[0] * dy - dx * ub[1]) / det, tb = (ua[0] * dy - dx * ua[1]) / det;
+    if (ta <= 0 || tb <= 0) return { err: "Those bearings don't cross in front of you — check the numbers and which landmark is which." };
+    return { ll: toLL(ax - ta * ua[0], ay - ta * ua[1]), acc: (BEARING_ERR * Math.hypot(ta, tb)) / Math.abs(det) };
+  }
+  async function openLandmarks() {
+    if (ui.lm) { ui.lm.remove(); delete ui.lm; return; }
+    const here = [lastState.lat, lastState.lon];
+    const sun = MarsTime.sunAt(here[0], lastState.ltst);
+    const d = document.createElement("form");
+    d.className = "nav-readings nav-lm";
+    d.innerHTML = `<b>Fix from two landmarks</b>
+      <span class="muted small">${sun.elevation > 0
+        ? `Sun now at <b>${Math.round(sun.azimuth)}°</b>, ${Math.round(sun.elevation)}° up — your shadow points <b>${Math.round((sun.azimuth + 180) % 360)}°</b>. Measure bearings (° clockwise from north) against that.`
+        : "The Sun is down — take bearings from a known direction or the star tracker."}
+        Mars has no compass field${Science.cite("bouyssounouse2016")}, and suit dead-reckoning drifts ~5.6% of the distance walked${Science.cite("li2010")}.</span>
+      <label>Landmark 1 <select name="a"><option>Loading…</option></select></label>
+      <label>Bearing to it <span><input name="ba" type="number" min="0" max="360" step="1" required> °</span></label>
+      <label>Landmark 2 <select name="b"><option>Loading…</option></select></label>
+      <label>Bearing to it <span><input name="bb" type="number" min="0" max="360" step="1" required> °</span></label>
+      <span class="muted small" data-msg></span>
+      <div class="nav-btns"><button type="submit">Get fix</button><button type="button" data-x>Cancel</button></div>`;
+    L.DomEvent.disableClickPropagation(d);
+    L.DomEvent.disableScrollPropagation(d);
+    d.querySelector("[data-x]").onclick = () => { d.remove(); delete ui.lm; };
+    map.getContainer().appendChild(d);
+    ui.lm = d;
+
+    // candidates: the route's stops, landing sites and named features you're outside of, within 80 km
+    const marks = stops.map((s, j) => ({ name: `${labels[j]} — route stop`, ll: [P.samples[s.idx].lat, P.samples[s.idx].lon], size: 0 }));
+    const [near, sites] = await Promise.all([
+      fetch(`/api/places/near?lat=${here[0]}&lon=${here[1]}&max_km=80&limit=20`).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+      fetch("/api/sites").then((r) => r.json()).then((x) => x.sites).catch(() => []),
+    ]);
+    for (const s of sites) marks.push({ name: `${s.name} — ${s.type === "lander" ? "lander" : "site"}`, ll: [s.lat, s.lon], size: 0 });
+    for (const f of near) if (f.dist_km > f.diameter_km / 2 + 0.5) marks.push({ name: `${f.name} (${f.kind}${f.diameter_km ? `, ${f.diameter_km.toFixed(0)} km` : ""})`, ll: [f.lat, f.lon], size: f.diameter_km * 250 });
+    const near80 = marks.map((m) => ({ ...m, km: Math.hypot(...toXY(...m.ll).map((v, i) => v - toXY(...here)[i])) / 1000 }))
+      .filter((m) => m.km > 0.05 && m.km <= 80).sort((a, b) => a.km - b.km);
+    if (!ui.lm) return;
+    const fill = (sel, k) => {
+      sel.innerHTML = near80.map((m, i) => `<option value="${i}">${m.name} · ${fmtKm(m.km)} ${compass16(bearingTo(here, m.ll))}</option>`).join("");
+      sel.value = String(Math.min(k, near80.length - 1));
+    };
+    if (near80.length < 2) { d.querySelector("[data-msg]").textContent = "Fewer than two known landmarks within 80 km — use a map tap or typed coordinates instead."; return; }
+    fill(d.elements.a, 0); fill(d.elements.b, 1);
+    d.onsubmit = (e) => {
+      e.preventDefault();
+      const A = near80[+d.elements.a.value], B = near80[+d.elements.b.value];
+      const msg = d.querySelector("[data-msg]");
+      if (A === B) { msg.textContent = "Pick two different landmarks."; return; }
+      const r = resect(A.ll, +d.elements.ba.value, B.ll, +d.elements.bb.value);
+      if (r.err) { msg.textContent = r.err; return; }
+      const acc = Math.max(10, Math.hypot(r.acc, A.size, B.size));
+      d.remove(); delete ui.lm;
+      fix(r.ll[0], r.ll[1], acc, "landmarks");
+      toast(`📐 Fix from ${A.name.split(" —")[0].split(" (")[0]} and ${B.name.split(" —")[0].split(" (")[0]} · ±${fmtKm(acc / 1000)}`);
+    };
+  }
+
   function toast(text) {
     const t = document.createElement("div");
     t.className = "nav-toast";
@@ -375,5 +447,5 @@ const Nav = (() => {
   });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && tapArmed) armTap(false); });
 
-  return { start, stop, fix, get active() { return active; } };
+  return { start, stop, fix, resect, get active() { return active; } };
 })();

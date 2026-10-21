@@ -32,6 +32,7 @@
         <button type="button" role="tab" data-tab="me">Me &amp; suit<span class="tab-dot" id="tab-me-dot" hidden></span></button>
         <button type="button" role="tab" data-tab="sites">Sites</button>
         <button type="button" role="tab" data-tab="conditions">Conditions</button>
+        <button type="button" role="tab" data-tab="science">Science</button>
       </nav>
       <section data-tab="me">
         <h2>Your position</h2>
@@ -71,9 +72,10 @@
               <label>Keep in reserve <span><input name="reservePct" type="number" min="0" max="50" step="1"> %</span></label>
             </fieldset>
             <button type="button" id="suit-reset">Fresh suit (refill to 100%)</button>
-            <p class="muted small">Effort per step is estimated from walking speed, slope, body mass and load (Pandolf
-              equation, scaled to Mars gravity and a pressurised suit), then turned into oxygen, CO₂-scrubber,
-              cooling-water and battery use.</p>
+            <p class="muted small">Effort per step comes from walking speed, slope, body mass and load (the Pandolf
+              equation), × 0.68 for Mars gravity — the drop measured walking at 0.38 g — and × 1.3 for suit joints.
+              It's then turned into oxygen, CO₂-scrubber, cooling-water and battery use. Sources are in the
+              <b>Science</b> tab.</p>
           </form>
         </details>
       </section>
@@ -130,8 +132,18 @@
       <section data-tab="conditions">
         <h2>Conditions at destination</h2>
         <div id="conditions" class="stats"></div>
-        <p class="muted small">Sun and local time are computed (Mars24 algorithm). Weather, dust and
-          radiation layers plug in from mission datasets — see README.</p>
+        <h3 class="sci-sub">Hazards &amp; resources here</h3>
+        <div id="hazards" class="sci"></div>
+        <p class="muted small">Sun, local time and Earth's distance are computed (Mars24 algorithm, JPL orbital
+          elements). The hazard notes come from published mission results — tap a number for its source.</p>
+      </section>
+
+      <section data-tab="science">
+        <h2>The science behind the numbers</h2>
+        <p class="muted small sci-intro">Every figure this app shows comes from a measurement or a published
+          model. Here are the <b id="science-count"></b> sources, what each one found, and where the app uses it.
+          The small numbers next to a figure link here.</p>
+        <div id="science-lib"></div>
       </section>
     </aside>
   </main>
@@ -139,6 +151,7 @@
   <div id="readout" class="readout"></div>
   <script src="marstime.js"></script>
   <script src="suit.js"></script>
+  <script src="science.js"></script>
   <script src="app.js"></script>
   <script src="directions.js"></script>
   <script src="groundview.js"></script>
