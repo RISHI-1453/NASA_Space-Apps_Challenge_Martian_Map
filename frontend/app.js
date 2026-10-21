@@ -50,6 +50,18 @@ L.control.layers(baseLayers, { ...hiresLayers, "Sites": sitesLayer, "High-res te
   { position: "topleft" }).addTo(map);
 L.control.scale({ imperial: false }).addTo(map); // note: scale assumes Earth radius — see README
 
+// open this view of the map on the 3D globe
+const Globe3DControl = L.Control.extend({
+  onAdd() {
+    const b = L.DomUtil.create("button", "globe-btn");
+    b.type = "button"; b.textContent = "🌐 3D"; b.title = "See this view on the 3D globe";
+    L.DomEvent.disableClickPropagation(b);
+    b.onclick = () => Globe.fromMap();
+    return b;
+  },
+});
+new Globe3DControl({ position: "topleft" }).addTo(map);
+
 // ---------- high-res terrain coverage ----------
 fetch("/api/dem").then((r) => r.json()).then((dems) => {
   for (const d of dems.filter((d) => d.name !== "mola")) {
@@ -104,7 +116,7 @@ map.on("mousemove", (e) => {
   $("readout").textContent = `${lat.toFixed(4)}°, ${lng.toFixed(4)}°E`;
   clearTimeout(readoutTimer);
   readoutTimer = setTimeout(async () => {
-    const r = await fetch(`/api/elevation?lat=${lat}&lon=${lng}`);
+    const r = await fetch(`/api/elevation?lat=${lat}&lon=${lng}&quick=1`); // never wait on a download for a hover
     if (r.ok) { const d = await r.json(); $("readout").textContent = `${lat.toFixed(4)}°, ${lng.toFixed(4)}°E · ${Math.round(d.elev_m)} m · ${d.source}`; }
   }, 120);
 });
@@ -364,7 +376,7 @@ function renderPanel(p, labels) {
   drawWalkback(p, sci);
   $("nav-start").onclick = () => Nav.start();
   if (rover) { $("nav-start").disabled = true; $("nav-start").title = "Live guidance is for walks on foot"; }
-  $("walk-3d").onclick = () => (typeof GroundView !== "undefined" ? GroundView.walk() : null);
+  $("walk-3d").onclick = () => Globe.walk();
 
   // turn-by-turn
   const el = $("directions");

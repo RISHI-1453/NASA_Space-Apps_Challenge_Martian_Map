@@ -46,7 +46,7 @@ At the end, the Mars globe turns past famous places, then **unrolls into the fla
 
 **Terrain (heights, slopes):** uses the sharpest model covering each point.
 - CTX Jezero DTM, 20 m/px. This is the USGS Mars 2020 landing-navigation product, with coverage shown as a green dashed box on the map.
-- **USGS HRSC/MOLA blended DEM, 200 m/px, everywhere on Mars.** The source file is 11 GB, uncompressed and stored row by row, so `backend/globaldem.py` reads only the rows it needs straight from the public copy, using HTTP range requests (about 0.5 KB per row, fetched in parallel and cached).
+- **USGS HRSC/MOLA blended DEM, 200 m/px, everywhere on Mars.** `backend/globaldem.py` streams it as 513×513 LERC elevation tiles from Esri's public hosting of the same USGS product. One ~250 KB tile covers 1.4° (about 83 km), so a whole neighbourhood arrives in a single request. Spot checks against the USGS GeoTIFF agree to about 1 m. Tiles are cached on disk (`data/esri_dem/`) and in memory, so each area downloads once; if the service is unreachable the app falls back to MOLA.
 - MGS MOLA MEGDR, about 3.7 km/px, as the offline fallback.
 
 **Directions (from → stops → to):** works like a maps app. A start or destination can be your position, a landing site, any of the 2,052 IAU-named places, typed coordinates (`-4.6, 137.4`), or a point chosen on the map. Stops can be added in between, and ⇅ swaps the ends. Every site, search result and dropped pin offers *Directions to here*, *Start from here*, *Add as stop* and *Ground view*. Points chosen on the map are named after the feature they're in, e.g. "Inside Jezero".
@@ -59,10 +59,34 @@ At the end, the Mars globe turns past famous places, then **unrolls into the fla
 
 The route summary shows the share of each supply the walk uses and names the **limiting supply**. Each stop shows the oxygen left on arrival. During live guidance, **Update readings** re-baselines from the real gauges, and the turn-back alert checks every supply, including the slower use while you're stopped. Suit capacities default to ISS-EMU figures (e.g. 0.54 kg primary O₂) and can be changed in `frontend/suit.js` for a Mars suit design.
 
+**Mars in 3D (`frontend/globe.js`):** the whole planet as a streaming 3D globe, like Google Earth, built on CesiumJS.
+- **Opening it:** the **🌐 3D** button on the map opens the same view in 3D, and **🗺 Back to map** returns the map to wherever you flew. Ground view opens a spot in 3D (directly, if no rover has been within 3 km).
+- **Terrain:** streamed as 65×65 heightmaps from `/api/terrain/tile/{z}/{x}/{y}`:
+  - The local MOLA grid for the planet view (instant).
+  - The HRSC/MOLA 200 m blend from zoom level 8.
+  - The 20 m CTX DTM in Jezero from level 9.
+  - **Relief ×1/×2/×3** exaggerates heights.
+- **Imagery:** the Viking colour mosaic, sharpened close up by the **global 5 m CTX mosaic** (Caltech Murray Lab, via Esri), plus HiRISE 25 cm and CTX 6 m in Jezero. You can switch to CTX only, Viking, MOLA elevation colours or THEMIS day-IR.
+- **On the globe:**
+  - Your route, draped on the terrain and coloured by slope, with its A/B/C pins.
+  - The dashed 10 km walk-home ring and the ⟲ point of no return.
+  - Landing and candidate sites, and all 2,052 IAU place names (big features from far away, small craters up close).
+  - **Perseverance's and Curiosity's real traverses** and their latest positions.
+  - Your position.
+- **👁 Eye level:** stand on the surface and drag to look around.
+- **Walk it in 3D:** fly along the planned route with a chase drone, at eye level or in free look, with a scrub bar showing distance, elevation, slope and the current instruction.
+- **Speed:**
+  - Cesium (about 1.7 MB) is prefetched in the background a few seconds after the page loads.
+  - The 3D view stays alive between opens, so reopening is instant.
+  - Terrain tiles are cached by the browser for 30 days.
+  - The status pill shows how many tiles are still streaming.
+- **Engine workarounds:** Mars needed two fixes Earth never does.
+  - Cesium won't draw terrain while the camera is below its ellipsoid, and Mars' lowlands sit up to 8 km below the datum. So the engine's sphere sits 10 km under the datum and every height is raised to match.
+  - Cesium sizes ground-draped lines from a table of Earth's terrain heights, which is replaced with one range that holds all of Mars.
+
 **Ground view (Street View for Mars):**
 - **Rover photos:** finds the nearest Perseverance or Curiosity stop within 3 km (from NASA's MMGIS rover-traverse data). It lays out that stop's Navcam frames around 360° by the mast azimuth and elevation recorded with each frame (NASA raw-image APIs). Drag to look around, scroll to zoom, and click a frame for full size. This covers Jezero (Perseverance) and Gale (Curiosity).
-- **3D terrain:** the sharpest elevation model (CTX DTM 20 m in Jezero, the HRSC/MOLA 200 m model elsewhere), with an area sized to match: about 8 km in Jezero, about 36 km elsewhere. It's draped with sharp greyscale detail (HiRISE, CTX or THEMIS 100 m), coloured from the Viking mosaic using a *luminosity* blend, under a Mars sky with the sun placed for your departure time. You can view it from overhead or **stand there at eye level**, with a *Relief ×3* toggle.
-- **Walk it in 3D:** fly along the planned route by drone, at eye level or in free look, with the path coloured by slope and the A/B/C pins in place. A scrub bar shows distance, elevation, slope and the current instruction.
+- **🌐 3D view:** opens the same spot on the 3D globe.
 
 **Your position (no GPS on Mars):**
 - **Search:** 2,052 official IAU place names (craters, mountains, valleys…). Choosing one flies the map there and opens a place card.
@@ -123,9 +147,10 @@ The route summary shows the share of each supply the walk uses and names the **l
 
 ```
 backend/app.py       FastAPI: /api/sites, /api/places, /api/places/near, /api/whereis, /api/elevation, /api/dem,
-                     /api/profile, /api/rover/nearest, /api/rover/photos, /api/terrain/grid
+                     /api/profile, /api/rover/nearest, /api/rover/photos, /api/rover/track,
+                     /api/terrain/tile/{z}/{x}/{y}, /api/features
 backend/places.py    IAU place-name search + "where am I" descriptions
-backend/globaldem.py 200 m global DEM via HTTP range reads (USGS HRSC/MOLA blend)
+backend/globaldem.py 200 m global DEM as cached LERC tiles (USGS HRSC/MOLA blend, hosted by Esri)
 backend/rover.py     nearest rover stop + its Navcam photos (NASA MMGIS + raw-image APIs, cached)
 backend/terrain.py   DEM sampling (local DTMs -> MOLA), great-circle densify, legs/directions, slope/EVA model
 frontend/            Leaflet (EPSG:4326 + Trek tiles), Chart.js profile, Mars clock
@@ -134,7 +159,8 @@ frontend/score.js    the intro's synthesised soundtrack (Web Audio)
 frontend/directions.js  From → stops → To planner, search, choose-on-map, popup actions
 frontend/suit.js     astronaut & suit readings, metabolic/consumables model
 frontend/science.js  the 41 cited sources, route research check, walk-back / point of no return, hazard notes
-frontend/groundview.js  rover photos look-around, 3D terrain, 3D route walk (Three.js)
+frontend/groundview.js  rover photos look-around (hands 3D over to globe.js)
+frontend/globe.js    the 3D Mars globe (CesiumJS): streaming terrain + imagery, route, sites, names, rover tracks, fly-along
 frontend/navigate.js live guidance: route snapping, off-route, next turn, O2/turn-back, simulation
 data/                sites.json, MOLA grid + Jezero DTM (downloaded, git-ignored)
 scripts/fetch_data.py      downloads the elevation data

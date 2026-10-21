@@ -1,111 +1,132 @@
-"""USGS Mars HRSC/MOLA Blended DEM, global, 200 m/px (Fergason et al. 2018), read straight from
-the public copy with HTTP range requests — the file is 11 GB, we fetch only the pixels we need.
+"""USGS Mars HRSC/MOLA Blended DEM v2, global, 200 m/px (Fergason et al. 2018), streamed as tiles.
 
-The GeoTIFF is uncompressed int16, one row per strip, stored contiguously, so the byte offset of
-any pixel is DATA0 + (row * W + col) * 2. Rows are fetched in parallel in 256-px chunks and kept
-in a small in-memory LRU cache. Heights are metres relative to the MOLA areoid.
+Esri hosts the same USGS product as a tiled elevation service: 513x513 float32 LERC tiles on a
+geographic grid (level 0 = two 180° tiles, origin 180°W 90°N, samples on the tile edges, so
+neighbours share their border). We read level 7 — 1.40625° (~83 km) per tile at 163 m spacing —
+so one ~250 KB request covers a whole neighbourhood, instead of one HTTP range request per DEM
+row from the uncompressed 11 GB USGS GeoTIFF. Spot checks against the USGS file agree to ~1 m.
+
+Tiles are kept on disk (data/esri_dem/) and in a small in-memory LRU, so every area downloads once.
+Heights are metres relative to the MOLA areoid.
 """
 from __future__ import annotations
 
-import math
 import threading
+import time
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import httpx
+import lerc
 import numpy as np
 
-URL = "https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/Mars/HRSC_MOLA_Blend/Mars_HRSC_MOLA_BlendDEM_Global_200mp_v2.tif"
+URL = "https://astro.arcgis.com/arcgis/rest/services/OnMars/MDEM200M/ImageServer/tile/{z}/{row}/{col}"
 LABEL = "HRSC/MOLA blend (200 m)"
-DATA0 = 854272                 # byte offset of pixel (0, 0)
-W, H = 106694, 53347           # pixels
-RES = 0.003374120830641        # degrees per pixel (pixel-is-area, origin 180°W 90°N)
 RES_M = 200
-NODATA = -32768
-CHUNK = 256                    # columns per cached chunk
-MAX_CHUNKS = 80_000            # ~40 MB of int16
-MAX_ROWS = 1600                # refuse windows taller than this (~320 km)
+LEVEL = 7                      # 163 m sample spacing — the native 200 m data
+N = 512                        # sample intervals per tile (513 samples)
+SPAN = 180 / 2 ** LEVEL        # degrees per tile
+ROWS, COLS = 2 ** LEVEL, 2 ** (LEVEL + 1)
+MAX_TILES = 64                 # ~67 MB of float32
+MAX_PREFETCH = 16              # tiles fetched up front for one route / area
+RETRY_AFTER_S = 60             # after a network failure, use MOLA for a minute before retrying
+CACHE = Path(__file__).resolve().parent.parent / "data" / "esri_dem"
 
-_client = httpx.Client(timeout=20, limits=httpx.Limits(max_connections=32, max_keepalive_connections=32))
-_pool = ThreadPoolExecutor(max_workers=24)
-_cache: OrderedDict[tuple[int, int], np.ndarray] = OrderedDict()
+_client = httpx.Client(timeout=30, headers={"User-Agent": "MartianMap/1.0 (NASA Space Apps)"})
+_pool = ThreadPoolExecutor(max_workers=8)
+_mem: OrderedDict[tuple[int, int], np.ndarray] = OrderedDict()
 _lock = threading.Lock()
-_failures = 0
+_key_locks: dict[tuple[int, int], threading.Lock] = {}
+_down_until = 0.0
 
 
-def _store(row: int, k: int, arr: np.ndarray) -> None:
-    with _lock:
-        _cache[(row, k)] = arr
-        _cache.move_to_end((row, k))
-        while len(_cache) > MAX_CHUNKS:
-            _cache.popitem(last=False)
-
-
-def _fetch(row: int, k0: int, k1: int) -> None:
-    c0, c1 = k0 * CHUNK, min(W, (k1 + 1) * CHUNK)
-    a = DATA0 + (row * W + c0) * 2
-    r = _client.get(URL, headers={"Range": f"bytes={a}-{a + (c1 - c0) * 2 - 1}"})
-    r.raise_for_status()
-    vals = np.frombuffer(r.content, dtype="<i2")
-    for k in range(k0, k1 + 1):
-        _store(row, k, vals[(k - k0) * CHUNK:(k - k0 + 1) * CHUNK].copy())
-
-
-def ensure(r0: int, r1: int, c0: int, c1: int) -> bool:
-    """Make sure pixels rows r0..r1, cols c0..c1 are cached. False if unavailable."""
-    global _failures
-    if _failures >= 3:
-        return False
-    r0, r1 = max(0, r0), min(H - 1, r1)
-    c0, c1 = max(0, c0), min(W - 1, c1)
-    if r1 - r0 + 1 > MAX_ROWS:
-        return False
-    k0, k1 = c0 // CHUNK, c1 // CHUNK
-    jobs = []
-    with _lock:
-        for row in range(r0, r1 + 1):
-            missing = [k for k in range(k0, k1 + 1) if (row, k) not in _cache]
-            if missing:
-                jobs.append((row, missing[0], missing[-1]))
-            else:
-                for k in range(k0, k1 + 1):
-                    _cache.move_to_end((row, k))
-    try:
-        for f in [_pool.submit(_fetch, *j) for j in jobs]:
-            f.result()
-        _failures = 0
-        return True
-    except Exception:
-        _failures += 1
-        return False
-
-
-def prefetch(s: float, w: float, n: float, e: float) -> bool:
-    r0, r1 = int((90 - n) / RES) - 1, int((90 - s) / RES) + 2
-    c0, c1 = int((w + 180) / RES) - 1, int((e + 180) / RES) + 2
-    return ensure(r0, r1, c0, c1)
-
-
-def _px(row: int, col: int) -> float | None:
-    a = _cache.get((row, col // CHUNK))
-    if a is None:
+def _read(row: int, col: int, fetch: bool) -> np.ndarray | None:
+    global _down_until
+    path = CACHE / f"{LEVEL}_{row}_{col}.lerc"
+    if path.exists():
+        blob = path.read_bytes()
+    elif fetch and time.time() >= _down_until:
+        try:
+            r = _client.get(URL.format(z=LEVEL, row=row, col=col))
+            r.raise_for_status()
+            blob = r.content
+        except Exception:
+            _down_until = time.time() + RETRY_AFTER_S
+            return None
+        CACHE.mkdir(parents=True, exist_ok=True)
+        path.with_suffix(".part").write_bytes(blob)
+        path.with_suffix(".part").replace(path)
+    else:
         return None
-    v = int(a[col % CHUNK])
-    return None if v == NODATA else float(v)
+    err, arr = lerc.decode(blob)[:2]
+    return None if err else np.asarray(arr, dtype=np.float32)
+
+
+def tile(row: int, col: int, fetch: bool = True) -> np.ndarray | None:
+    """The 513x513 level-7 tile at (row, col), or None if unavailable (or not cached and fetch=False)."""
+    key = (row, col)
+    with _lock:
+        if key in _mem:
+            _mem.move_to_end(key)
+            return _mem[key]
+        klock = _key_locks.setdefault(key, threading.Lock())
+    with klock:  # concurrent requests for the same tile wait for one download
+        with _lock:
+            if key in _mem:
+                return _mem[key]
+        arr = _read(row, col, fetch)
+        if arr is not None:
+            with _lock:
+                _mem[key] = arr
+                while len(_mem) > MAX_TILES:
+                    _mem.popitem(last=False)
+        return arr
+
+
+def _rc(lat: float, lon: float) -> tuple[int, int]:
+    row = min(ROWS - 1, max(0, int((90 - lat) // SPAN)))
+    col = min(COLS - 1, max(0, int((lon + 180) // SPAN)))
+    return row, col
+
+
+def _bilinear(a: np.ndarray, fy: np.ndarray, fx: np.ndarray) -> np.ndarray:
+    fy, fx = np.clip(fy, 0, N), np.clip(fx, 0, N)
+    y0, x0 = np.minimum(fy.astype(int), N - 1), np.minimum(fx.astype(int), N - 1)
+    v, u = fy - y0, fx - x0
+    return ((a[y0, x0] * (1 - u) + a[y0, x0 + 1] * u) * (1 - v) +
+            (a[y0 + 1, x0] * (1 - u) + a[y0 + 1, x0 + 1] * u) * v)
 
 
 def sample(lat: float, lon: float, fetch: bool = True) -> float | None:
-    """Bilinear elevation (m), or None if unavailable / no data / not cached (fetch=False)."""
-    y = (90 - lat) / RES - 0.5
-    x = (lon + 180) / RES - 0.5
-    r, c = int(math.floor(y)), int(math.floor(x))
-    if not (0 <= r < H - 1 and 0 <= c < W - 1):
+    """Bilinear elevation (m), or None if unavailable (or not cached and fetch=False)."""
+    row, col = _rc(lat, lon)
+    a = tile(row, col, fetch)
+    if a is None:
         return None
-    if (r, c // CHUNK) not in _cache or (r + 1, (c + 1) // CHUNK) not in _cache:
-        if not fetch or not ensure(r, r + 1, c, c + 1):
-            return None
-    q = [_px(r, c), _px(r, c + 1), _px(r + 1, c), _px(r + 1, c + 1)]
-    if any(v is None for v in q):
+    fy = np.array([(90 - row * SPAN - lat) / SPAN * N])
+    fx = np.array([(lon - (-180 + col * SPAN)) / SPAN * N])
+    return float(_bilinear(a, fy, fx)[0])
+
+
+def tile_grid(z: int, x: int, y: int, n: int) -> np.ndarray | None:
+    """n x n heights spanning geographic tile (z, x, y) edge to edge (row 0 = north), z >= LEVEL."""
+    k = z - LEVEL
+    row, col = y >> k, x >> k
+    a = tile(row, col)
+    if a is None:
         return None
-    fy, fx = y - r, x - c
-    return (q[0] * (1 - fx) + q[1] * fx) * (1 - fy) + (q[2] * (1 - fx) + q[3] * fx) * fy
+    sub = N / 2 ** k  # samples per sub-tile
+    t = np.arange(n) * (sub / (n - 1))
+    fy, fx = np.meshgrid((y - (row << k)) * sub + t, (x - (col << k)) * sub + t, indexing="ij")
+    return _bilinear(a, fy, fx)
+
+
+def prefetch(s: float, w: float, n: float, e: float) -> bool:
+    """Download (in parallel) the tiles covering an area, if it's not too big."""
+    r0, c0 = _rc(n, w)
+    r1, c1 = _rc(s, e)
+    keys = [(r, c) for r in range(r0, r1 + 1) for c in range(c0, c1 + 1)]
+    if len(keys) > MAX_PREFETCH:
+        return False
+    return all(a is not None for a in _pool.map(lambda rc: tile(*rc), keys))

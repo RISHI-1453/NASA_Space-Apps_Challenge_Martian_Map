@@ -23,9 +23,10 @@ def sites():
 
 
 @app.get("/api/elevation")
-def elevation(lat: float, lon: float):
+def elevation(lat: float, lon: float, quick: bool = False):
+    """quick=1 never waits on a download (the cursor readout): cached 200 m data, else MOLA."""
     try:
-        z, src = terrain.elevation_src(lat, lon)
+        z, src = terrain.elevation_src(lat, lon, fetch=not quick)
         return {"lat": lat, "lon": lon, "elev_m": round(z, 1), "source": src}
     except FileNotFoundError as e:
         raise HTTPException(503, str(e))
@@ -72,24 +73,33 @@ def rover_photos(mission: str, sol: int, site: int | None = None, drive: int | N
         raise HTTPException(502, f"NASA raw-image service unavailable: {e}")
 
 
-@app.get("/api/terrain/grid")
-def terrain_grid(s: float, w: float, n: float, e: float, nx: int = 160, ny: int = 160):
-    """Elevation grid (metres, float32, row 0 = north) for the 3D view, from the sharpest DEM."""
-    nx, ny = max(2, min(nx, 320)), max(2, min(ny, 320))
-    import numpy as np
-    out = np.empty((ny, nx), dtype="<f4")
-    sources: dict[str, int] = {}
-    terrain.prefetch(s, w, n, e)
-    for j in range(ny):
-        lat = n - (n - s) * j / (ny - 1)
-        for i in range(nx):
-            z, src = terrain.elevation_src(lat, w + (e - w) * i / (nx - 1))
-            out[j, i] = z
-            sources[src] = sources.get(src, 0) + 1
-    main = max(sources, key=sources.get)
-    return Response(out.tobytes(), media_type="application/octet-stream",
-                    headers={"X-Nx": str(nx), "X-Ny": str(ny), "X-Source": main,
-                             "Access-Control-Expose-Headers": "X-Nx, X-Ny, X-Source"})
+@app.get("/api/terrain/tile/{z}/{x}/{y}")
+def terrain_tile(z: int, x: int, y: int):
+    """3D-globe heightmap: 65x65 int16 metres over geographic tile (z, x, y), row 0 = north."""
+    if not (0 <= z <= 22 and 0 <= x < 2 ** (z + 1) and 0 <= y < 2 ** z):
+        raise HTTPException(404, "no such tile")
+    data, src = terrain.tile_bytes(z, x, y)
+    # tiles never change, so browsers can keep them; a MOLA stand-in for a missed download can't
+    stand_in = z >= terrain.NET_LEVEL and src == terrain.MOLA_LABEL
+    return Response(data, media_type="application/octet-stream",
+                    headers={"X-Source": src, "Access-Control-Expose-Headers": "X-Source",
+                             "Cache-Control": "public, max-age=120" if stand_in else "public, max-age=2592000, immutable"})
+
+
+@app.get("/api/features")
+def all_features():
+    """Every IAU-named feature, compact: [name, kind, lat, lon, diameter_km, MOLA elevation m] — globe labels."""
+    return [[f["name"], f["kind"], f["lat"], f["lon"], f["diameter_km"], round(terrain.mola_elevation(f["lat"], f["lon"]))]
+            for f in places.features()]
+
+
+@app.get("/api/rover/track")
+def rover_track(mission: str):
+    """A rover's whole traverse as [[lat, lon], ...] plus its latest stop."""
+    if mission not in rover.MISSIONS:
+        raise HTTPException(400, "mission must be m2020 or msl")
+    wp = rover.waypoints(mission)
+    return {"rover": rover.MISSIONS[mission]["name"], "points": [[p["lat"], p["lon"]] for p in wp], "latest": wp[-1]}
 
 
 @app.get("/api/dem")

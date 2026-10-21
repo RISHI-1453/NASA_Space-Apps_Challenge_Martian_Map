@@ -2,7 +2,7 @@
 
 Elevation comes from the sharpest source covering a point:
   1. Local high-resolution DTMs (e.g. Jezero CTX, 20 m/px) - see LOCAL_DEMS
-  2. USGS HRSC/MOLA blended global DEM, 200 m/px, read on demand over HTTP - globaldem.py
+  2. USGS HRSC/MOLA blended global DEM, 200 m/px, streamed as cached tiles - globaldem.py
   3. MGS MOLA MEGDR global grid, 16 px/deg (~3.7 km/px) - offline fallback
 
 Coordinates: planetocentric latitude, EAST longitude in [-180, 180] (what the Leaflet map uses).
@@ -11,6 +11,8 @@ Heights are metres relative to the MOLA areoid (the local DTMs are tied to MOLA)
 from __future__ import annotations
 
 import math
+import threading
+from collections import OrderedDict
 from pathlib import Path
 
 import numpy as np
@@ -49,6 +51,21 @@ def mola_elevation(lat: float, lon: float) -> float:
     top = d[y0, x0] * (1 - fx) + d[y0, x1] * fx
     bot = d[y0 + 1, x0] * (1 - fx) + d[y0 + 1, x1] * fx
     return float(top * (1 - fy) + bot * fy)
+
+
+def mola_grid(lats: np.ndarray, lons: np.ndarray) -> np.ndarray:
+    """Bilinear MOLA heights on the grid lats (rows) x lons (columns)."""
+    d = dem()
+    y = np.clip((90 - lats) * PPD - 0.5, 0, LINES - 1.001)
+    x = (lons % 360) * PPD - 0.5
+    y0 = y.astype(int)
+    x0f = np.floor(x)
+    x0, x1 = x0f.astype(int) % SAMPLES, (x0f.astype(int) + 1) % SAMPLES
+    fy, fx = (y - y0)[:, None], (x - x0f)[None, :]
+    rows0, rows1 = np.asarray(d[y0], dtype=np.float32), np.asarray(d[y0 + 1], dtype=np.float32)
+    top = rows0[:, x0] * (1 - fx) + rows0[:, x1] * fx
+    bot = rows1[:, x0] * (1 - fx) + rows1[:, x1] * fx
+    return top * (1 - fy) + bot * fy
 
 
 class LocalDEM:
@@ -99,6 +116,30 @@ class LocalDEM:
         v = (q[0, 0] * (1 - fx) + q[0, 1] * fx) * (1 - fy) + (q[1, 0] * (1 - fx) + q[1, 1] * fx) * fy
         return float(v)
 
+    def overlaps(self, s: float, w: float, n: float, e: float) -> bool:
+        if not self.available():
+            return False
+        bs, bw, bn, be = self.bounds
+        return s < bn and n > bs and w < be and e > bw
+
+    def fill(self, lats: np.ndarray, lons: np.ndarray, out: np.ndarray) -> None:
+        """Overwrite out (lats x lons grid) with this DTM's heights wherever it has data."""
+        h, wd = self._a.shape
+        y = (self.y0 - np.radians(lats) * self.radius) / self.sy - 0.5
+        x = (np.radians(lons) * self.radius - self.x0) / self.sx - 0.5
+        Y, X = np.meshgrid(y, x, indexing="ij")
+        ok = (X >= 0) & (X < wd - 1) & (Y >= 0) & (Y < h - 1)
+        if not ok.any():
+            return
+        xi, yi = X[ok].astype(int), Y[ok].astype(int)
+        fx, fy = X[ok] - xi, Y[ok] - yi
+        a = self._a
+        v = ((a[yi, xi] * (1 - fx) + a[yi, xi + 1] * fx) * (1 - fy) +
+             (a[yi + 1, xi] * (1 - fx) + a[yi + 1, xi + 1] * fx) * fy)
+        good = ~np.isnan(v)
+        idx = np.flatnonzero(ok)[good]
+        out.flat[idx] = v[good]
+
 
 LOCAL_DEMS = [
     LocalDEM("jezero_ctx", DATA / "jezero_ctx_dtm_20m.tif", "CTX Jezero DTM (20 m)"),
@@ -127,6 +168,55 @@ def prefetch(s: float, w: float, n: float, e: float) -> None:
 
 def elevation(lat: float, lon: float) -> float:
     return elevation_src(lat, lon)[0]
+
+
+# --- 3D globe terrain tiles -------------------------------------------------------------------
+# Heightmaps for the 3D globe on a geographic tile grid (level 0 = two 180° tiles, like the map
+# imagery): TILE_N x TILE_N int16 metres, row 0 = north, samples on the tile edges. The planet
+# view uses the local MOLA grid (instant); closer in, the 200 m blend; in Jezero, the 20 m DTM.
+TILE_N = 65
+NET_LEVEL = 8        # from this level on, the 200 m tiles add real detail over MOLA's 3.7 km
+LOCAL_LEVEL = 9      # and from here, local DTMs
+_tiles: OrderedDict[tuple[int, int, int], tuple[bytes, str]] = OrderedDict()
+_tiles_lock = threading.Lock()
+MAX_TILE_CACHE = 6000  # ~50 MB
+
+
+def tile_heights(z: int, x: int, y: int) -> tuple[np.ndarray, str]:
+    span = 180 / 2 ** z
+    lat_n, lon_w = 90 - y * span, -180 + x * span
+    t = np.arange(TILE_N) * (span / (TILE_N - 1))
+    lats, lons = lat_n - t, lon_w + t
+    h, src = None, MOLA_LABEL
+    if z >= NET_LEVEL:
+        h = globaldem.tile_grid(z, x, y, TILE_N)
+        if h is not None:
+            src = globaldem.LABEL
+    if h is None:
+        h = mola_grid(lats, lons)
+    if z >= LOCAL_LEVEL:
+        for d in LOCAL_DEMS:
+            if d.overlaps(lats[-1], lons[0], lats[0], lons[-1]):
+                h = np.array(h, dtype=np.float32)
+                d.fill(lats, lons, h)
+                src = d.label
+    return np.round(h).astype("<i2"), src
+
+
+def tile_bytes(z: int, x: int, y: int) -> tuple[bytes, str]:
+    key = (z, x, y)
+    with _tiles_lock:
+        if key in _tiles:
+            _tiles.move_to_end(key)
+            return _tiles[key]
+    h, src = tile_heights(z, x, y)
+    out = (h.tobytes(), src)
+    if z < NET_LEVEL or src != MOLA_LABEL:  # don't keep a MOLA stand-in for a tile the network missed
+        with _tiles_lock:
+            _tiles[key] = out
+            while len(_tiles) > MAX_TILE_CACHE:
+                _tiles.popitem(last=False)
+    return out
 
 
 def dem_coverage() -> list[dict]:
@@ -251,7 +341,7 @@ def profile(waypoints: list[tuple[float, float]], step_m: float = 250) -> dict:
     # keep the sample count sane on very long routes
     total = sum(haversine_m(a, b) for a, b in zip(waypoints, waypoints[1:]))
     # walking-scale routes get the 200 m global DEM; for very long (rover-scale) routes the
-    # per-row downloads aren't worth it - MOLA (local file) is plenty at that scale
+    # tile downloads aren't worth it - MOLA (local file) is plenty at that scale
     use_net = total <= 120_000
     if use_net:
         la = [p[0] for p in waypoints]; lo = [p[1] for p in waypoints]
