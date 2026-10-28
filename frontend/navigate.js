@@ -1,12 +1,10 @@
 // Live Marswalk guidance: "am I on the right path?"
 //
 // Mars has no GPS. During an EVA the astronaut's position comes from the suit/rover navigation
-// fix (radio ranging to the lander, visual odometry, IMU). This module accepts fixes from:
-//   - Manual: tap the map at the fix, or type coordinates ("Your position" → I'm here)
-//   - Simulate: walks the planned route at the modelled pace (optionally drifting off course),
-//     so the guidance can be demonstrated.
-// Each fix is snapped to the planned route to get progress, cross-track error, next turn,
-// time/O₂ remaining, hazards ahead, and a turn-back alert.
+// fix (radio ranging to the lander, visual odometry, IMU). The astronaut reports each fix by
+// tapping the map, typing coordinates, or "Your position" → I'm here. Each fix is snapped to the
+// planned route to get progress, cross-track error, next turn, time/O₂ remaining, hazards ahead,
+// and a turn-back alert.
 const Nav = (() => {
   const OFF_ROUTE_M = 40;   // cross-track distance that counts as off route
   const ARRIVE_M = 30;      // within this of a stop = arrived
@@ -15,8 +13,7 @@ const Nav = (() => {
 
   let active = false, P = null, labels = [], pts = [], cum = [], lat0 = 0, lon0 = 0;
   let stops = [], arrived = new Set(), progress = 0, lastAlong = 0, wrongWayCount = 0;
-  let mode = "sim", simT = 0, simTimer = null, simSpeed = 60, drift = false, driftOff = 0;
-  let startWall = 0, follow = true, voice = false, lastSaid = "", fixCount = 0;
+  let startWall = 0, follow = true, fixCount = 0;
   const layer = L.layerGroup();
   let doneLine, trail, posMarker, rejoinLine, accCircle;
   const ui = {};
@@ -51,13 +48,6 @@ const Nav = (() => {
   const tAt = (along) => { const { i, t } = pointAt(along); return TL.t[i] + t * (TL.t[i + 1] - TL.t[i]); };
   const usedAt = (along) => { const { i, t } = pointAt(along); return Object.fromEntries(Suit.RES.map((r) => [r.key, TL[r.key][i] + t * (TL[r.key][i + 1] - TL[r.key][i])])); };
   function rebase() { base = { have: Suit.available(), at: usedAt(progress), t: tAt(progress), el: elapsed() }; }
-  function alongAtTime(h) {
-    if (h <= 0) return 0;
-    for (let i = 0; i < TL.t.length - 1; i++) {
-      if (TL.t[i + 1] >= h) return cum[i] + ((h - TL.t[i]) / ((TL.t[i + 1] - TL.t[i]) || 1)) * (cum[i + 1] - cum[i]);
-    }
-    return cum[cum.length - 1];
-  }
   const bearingTo = (a, b) => {
     const [la1, lo1, la2, lo2] = [a[0] * RAD, a[1] * RAD, b[0] * RAD, b[1] * RAD];
     const y = Math.sin(lo2 - lo1) * Math.cos(la2);
@@ -68,7 +58,7 @@ const Nav = (() => {
   const compass16 = (b) => COMPASS16[Math.round(b / 22.5) % 16];
 
   // ---- mission clock ----
-  const elapsed = () => (mode === "sim" ? simT : (Date.now() - startWall) / 3.6e6);
+  const elapsed = () => (Date.now() - startWall) / 3.6e6;
   const departLtst = () => { const [h, m] = ($("depart").value || "09:00").split(":").map(Number); return h + m / 60; };
 
   // ---- HUD ----
@@ -80,29 +70,15 @@ const Nav = (() => {
     ui.alert.hidden = true;
     ui.bottom = mk("nav-bottom");
     ui.ctrl = mk("nav-ctrl", `
-      <div class="nav-ctrl-row"><b>Your position from</b>
-        <select id="nav-mode"><option value="manual">Nav fixes</option><option value="sim">Demo: simulate a walk</option></select></div>
-      <div class="nav-ctrl-col" id="nav-man-row">
+      <div class="nav-ctrl-col">
+        <b>Report your position</b>
         <button id="nav-tap" type="button">📍 Tap my position on the map</button>
-        <button id="nav-lm" type="button" title="Measure bearings to two landmarks against the Sun">📐 Fix from two landmarks</button>
         <form id="nav-coord" class="nav-ctrl-row"><input id="nav-coord-in" placeholder="or type lat, lon" aria-label="Nav fix coordinates" autocomplete="off"><button type="submit">Go</button></form>
         <span class="muted small" id="nav-lastfix">Starting at A. Report your position as you walk.</span>
-      </div>
-      <div class="nav-ctrl-row" id="nav-sim-row" hidden>
-        <button id="nav-play">▶</button>
-        <select id="nav-speed"><option value="10">10×</option><option value="60" selected>60×</option><option value="300">300×</option><option value="900">900×</option></select>
-        <label><input type="checkbox" id="nav-drift"> Drift off route</label></div>
-      <div class="nav-ctrl-row"><label><input type="checkbox" id="nav-voice"> 🔊 Voice</label></div>`);
+      </div>`);
     L.DomEvent.disableClickPropagation(ui.ctrl);
     L.DomEvent.disableClickPropagation(ui.bottom);
-    ui.ctrl.querySelector("#nav-mode").value = mode;
-    ui.ctrl.querySelector("#nav-mode").onchange = (e) => setMode(e.target.value);
-    ui.ctrl.querySelector("#nav-play").onclick = () => (simTimer ? pauseSim() : playSim());
-    ui.ctrl.querySelector("#nav-speed").onchange = (e) => { simSpeed = +e.target.value; };
-    ui.ctrl.querySelector("#nav-drift").onchange = (e) => { drift = e.target.checked; };
-    ui.ctrl.querySelector("#nav-voice").onchange = (e) => { voice = e.target.checked; lastSaid = ""; };
     ui.ctrl.querySelector("#nav-tap").onclick = () => armTap(!tapArmed);
-    ui.ctrl.querySelector("#nav-lm").onclick = openLandmarks;
     ui.ctrl.querySelector("#nav-coord").onsubmit = (e) => {
       e.preventDefault();
       const c = parseCoords(ui.ctrl.querySelector("#nav-coord-in").value || "");
@@ -113,13 +89,6 @@ const Nav = (() => {
     map.on("dragstart", stopFollow);
   }
   function stopFollow() { if (active) { follow = false; render(lastState); } }
-
-  function say(text) {
-    if (!voice || !window.speechSynthesis || text === lastSaid) return;
-    lastSaid = text;
-    speechSynthesis.cancel();
-    speechSynthesis.speak(new SpeechSynthesisUtterance(text.replace(/[↑↗↖→←↘↙↩⚠✓✗]/g, "")));
-  }
 
   // ---- core: process one position fix ----
   let lastState = null;
@@ -137,8 +106,8 @@ const Nav = (() => {
     if (acc > 8 && !layer.hasLayer(accCircle)) accCircle.addTo(layer);
     if (acc <= 8) accCircle.remove();
     const lf = document.getElementById("nav-lastfix");
-    const HOW = { tap: "map tap", typed: "typed", start: "route start", landmarks: "two landmarks" };
-    if (lf && how !== "refresh" && how !== "sim") lf.textContent = `Last fix (${HOW[how] || "position"}): ${fmtLatLon(lat, lon)} ±${Math.round(acc)} m`;
+    const HOW = { tap: "map tap", typed: "typed", start: "route start" };
+    if (lf && how !== "refresh") lf.textContent = `Last fix (${HOW[how] || "position"}): ${fmtLatLon(lat, lon)} ±${Math.round(acc)} m`;
     if (!offRoute) progress = Math.max(progress, along);
 
     trail.addLatLng([lat, lon]);
@@ -177,8 +146,7 @@ const Nav = (() => {
     const hazard = P.hazards.find((h) => h.dist_m > progress && h.dist_m <= progress + HAZARD_LOOKAHEAD_M);
     lastState = { lat, lon, acc, s, offRoute, next, total, el, tPlan, tRem, left, needRest, reserve, ltst, day, hazard, snapLL };
     render(lastState);
-    if (follow) map.panTo([lat, lon], { animate: mode !== "sim" || simSpeed < 300 });
-    if (next === -1 && arrived.has(stops.length - 1)) pauseSim();
+    if (follow) map.panTo([lat, lon]);
   }
 
   function render(st) {
@@ -238,9 +206,6 @@ const Nav = (() => {
     ui.bottom.querySelector("#nav-view").onclick = () => typeof GroundView !== "undefined" && GroundView.at(lat, lon, "Your position");
     const rc = ui.bottom.querySelector("#nav-recenter");
     if (rc) rc.onclick = () => { follow = true; map.panTo([lat, lon]); render(lastState); };
-
-    say(offRoute ? `Off route. Head ${compassWord(compass16(bearingTo([lat, lon], snapLL)))} to rejoin.`
-      : alerts.length && alerts[0][0] === "bad" ? alerts[0][1] : line); // speak on changes only, not every metre
   }
 
   // the astronaut reports suit gauges / how they feel; the plan re-baselines from these numbers
@@ -272,81 +237,10 @@ const Nav = (() => {
   // new readings or a change in pace: rebuild the timeline and carry on from here
   Suit.onChange(() => {
     if (!active) return;
-    const keepT = elapsed();
     TL = Suit.timeline(P);
-    if (mode === "sim") simT = keepT;
     rebase();
     if (lastState) fix(lastState.lat, lastState.lon, lastState.acc, "refresh");
   });
-
-  // ---- two-landmark fix (resection) ----
-  // No GPS and no working compass on Mars, but the Sun's direction is known at every moment, so
-  // the astronaut measures bearings to two landmarks they can see and we intersect the two sight lines.
-  const BEARING_ERR = 3 * RAD; // a careful sun-referenced bearing by eye
-  function resect(A, thA, B, thB) {
-    const [ax, ay] = toXY(...A), [bx, by] = toXY(...B);
-    const ua = [Math.sin(thA * RAD), Math.cos(thA * RAD)], ub = [Math.sin(thB * RAD), Math.cos(thB * RAD)];
-    // you + ta·ua = A and you + tb·ub = B  →  ta·ua − tb·ub = A − B
-    const det = ub[0] * ua[1] - ua[0] * ub[1];
-    if (Math.abs(det) < Math.sin(20 * RAD)) return { err: "The two sight lines are too close to parallel — pick landmarks in more different directions (ideally 60–120° apart)." };
-    const dx = ax - bx, dy = ay - by;
-    const ta = (ub[0] * dy - dx * ub[1]) / det, tb = (ua[0] * dy - dx * ua[1]) / det;
-    if (ta <= 0 || tb <= 0) return { err: "Those bearings don't cross in front of you — check the numbers and which landmark is which." };
-    return { ll: toLL(ax - ta * ua[0], ay - ta * ua[1]), acc: (BEARING_ERR * Math.hypot(ta, tb)) / Math.abs(det) };
-  }
-  async function openLandmarks() {
-    if (ui.lm) { ui.lm.remove(); delete ui.lm; return; }
-    const here = [lastState.lat, lastState.lon];
-    const sun = MarsTime.sunAt(here[0], lastState.ltst);
-    const d = document.createElement("form");
-    d.className = "nav-readings nav-lm";
-    d.innerHTML = `<b>Fix from two landmarks</b>
-      <span class="muted small">${sun.elevation > 0
-        ? `Sun now at <b>${Math.round(sun.azimuth)}°</b>, ${Math.round(sun.elevation)}° up — your shadow points <b>${Math.round((sun.azimuth + 180) % 360)}°</b>. Measure bearings (° clockwise from north) against that.`
-        : "The Sun is down — take bearings from a known direction or the star tracker."}
-        Mars has no compass field${Science.cite("bouyssounouse2016")}, and suit dead-reckoning drifts ~5.6% of the distance walked${Science.cite("li2010")}.</span>
-      <label>Landmark 1 <select name="a"><option>Loading…</option></select></label>
-      <label>Bearing to it <span><input name="ba" type="number" min="0" max="360" step="1" required> °</span></label>
-      <label>Landmark 2 <select name="b"><option>Loading…</option></select></label>
-      <label>Bearing to it <span><input name="bb" type="number" min="0" max="360" step="1" required> °</span></label>
-      <span class="muted small" data-msg></span>
-      <div class="nav-btns"><button type="submit">Get fix</button><button type="button" data-x>Cancel</button></div>`;
-    L.DomEvent.disableClickPropagation(d);
-    L.DomEvent.disableScrollPropagation(d);
-    d.querySelector("[data-x]").onclick = () => { d.remove(); delete ui.lm; };
-    map.getContainer().appendChild(d);
-    ui.lm = d;
-
-    // candidates: the route's stops, landing sites and named features you're outside of, within 80 km
-    const marks = stops.map((s, j) => ({ name: `${labels[j]} — route stop`, ll: [P.samples[s.idx].lat, P.samples[s.idx].lon], size: 0 }));
-    const [near, sites] = await Promise.all([
-      fetch(`/api/places/near?lat=${here[0]}&lon=${here[1]}&max_km=80&limit=20`).then((r) => (r.ok ? r.json() : [])).catch(() => []),
-      fetch("/api/sites").then((r) => r.json()).then((x) => x.sites).catch(() => []),
-    ]);
-    for (const s of sites) marks.push({ name: `${s.name} — ${s.type === "lander" ? "lander" : "site"}`, ll: [s.lat, s.lon], size: 0 });
-    for (const f of near) if (f.dist_km > f.diameter_km / 2 + 0.5) marks.push({ name: `${f.name} (${f.kind}${f.diameter_km ? `, ${f.diameter_km.toFixed(0)} km` : ""})`, ll: [f.lat, f.lon], size: f.diameter_km * 250 });
-    const near80 = marks.map((m) => ({ ...m, km: Math.hypot(...toXY(...m.ll).map((v, i) => v - toXY(...here)[i])) / 1000 }))
-      .filter((m) => m.km > 0.05 && m.km <= 80).sort((a, b) => a.km - b.km);
-    if (!ui.lm) return;
-    const fill = (sel, k) => {
-      sel.innerHTML = near80.map((m, i) => `<option value="${i}">${m.name} · ${fmtKm(m.km)} ${compass16(bearingTo(here, m.ll))}</option>`).join("");
-      sel.value = String(Math.min(k, near80.length - 1));
-    };
-    if (near80.length < 2) { d.querySelector("[data-msg]").textContent = "Fewer than two known landmarks within 80 km — use a map tap or typed coordinates instead."; return; }
-    fill(d.elements.a, 0); fill(d.elements.b, 1);
-    d.onsubmit = (e) => {
-      e.preventDefault();
-      const A = near80[+d.elements.a.value], B = near80[+d.elements.b.value];
-      const msg = d.querySelector("[data-msg]");
-      if (A === B) { msg.textContent = "Pick two different landmarks."; return; }
-      const r = resect(A.ll, +d.elements.ba.value, B.ll, +d.elements.bb.value);
-      if (r.err) { msg.textContent = r.err; return; }
-      const acc = Math.max(10, Math.hypot(r.acc, A.size, B.size));
-      d.remove(); delete ui.lm;
-      fix(r.ll[0], r.ll[1], acc, "landmarks");
-      toast(`📐 Fix from ${A.name.split(" —")[0].split(" (")[0]} and ${B.name.split(" —")[0].split(" (")[0]} · ±${fmtKm(acc / 1000)}`);
-    };
-  }
 
   function toast(text) {
     const t = document.createElement("div");
@@ -354,36 +248,6 @@ const Nav = (() => {
     t.textContent = text;
     map.getContainer().appendChild(t);
     setTimeout(() => t.remove(), 3500);
-    say(text);
-  }
-
-  // ---- simulation ----
-  function simStep() {
-    simT += (0.2 * simSpeed) / 3600;
-    const along = alongAtTime(simT);
-    const p = pointAt(along);
-    // drift: walk off to one side (perpendicular to the path), then come back when unticked
-    driftOff = drift ? Math.min(150, driftOff + 0.4 * simSpeed * 0.2) : Math.max(0, driftOff - 1.2 * simSpeed * 0.2);
-    const [ax, ay] = pts[p.i], [bx, by] = pts[p.i + 1];
-    const len = Math.hypot(bx - ax, by - ay) || 1;
-    const nx = -(by - ay) / len, ny = (bx - ax) / len;
-    fix(...toLL(p.xy[0] + nx * driftOff, p.xy[1] + ny * driftOff), 5, "sim");
-  }
-  function playSim() {
-    if (simTimer || mode !== "sim") return;
-    simTimer = setInterval(simStep, 200);
-    const b = document.getElementById("nav-play"); if (b) b.textContent = "❚❚";
-  }
-  function pauseSim() {
-    clearInterval(simTimer); simTimer = null;
-    const b = document.getElementById("nav-play"); if (b) b.textContent = "▶";
-  }
-  function setMode(m) {
-    mode = m;
-    document.getElementById("nav-sim-row").hidden = m !== "sim";
-    document.getElementById("nav-man-row").hidden = m !== "manual";
-    if (m === "sim") { armTap(false); playSim(); }
-    else { pauseSim(); startWall = Date.now() - simT * 3.6e6; } // keep the mission clock continuous
   }
 
   // ---- start / stop ----
@@ -396,7 +260,7 @@ const Nav = (() => {
     for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
     stops = [{ idx: 0, dist: 0 }, ...P.legs.map((l) => ({ idx: l.to_idx, dist: cum[l.to_idx] }))];
     arrived = new Set(); progress = 0; lastAlong = 0; wrongWayCount = 0;
-    simT = 0; driftOff = 0; drift = false; follow = true; lastSaid = ""; fixCount = 0;
+    follow = true; fixCount = 0;
     startWall = Date.now();
     TL = Suit.timeline(P);
     rebase();
@@ -411,22 +275,17 @@ const Nav = (() => {
     posMarker = L.marker([lat0, lon0], { icon: L.divIcon({ className: "", html: '<div class="me-dot nav"></div>', iconSize: [22, 22], iconAnchor: [11, 11] }), zIndexOffset: 3000, interactive: false });
     buildHud();
     map.setView([lat0, lon0], Math.max(map.getZoom(), 15));
-    // the walk starts at A; it only moves when the astronaut reports a position (or picks the demo)
-    mode = "manual";
-    document.getElementById("nav-mode").value = mode;
-    setMode(mode);
+    // the walk starts at A; it only moves when the astronaut reports a position
     const atStart = me && Math.hypot(...toXY(me[0], me[1])) < 100;
     fix(...(atStart ? me : [lat0, lon0]), atStart ? 15 : 3, atStart ? "position" : "start");
   }
   function stop() {
-    pauseSim();
     armTap(false);
     active = false;
     document.body.classList.remove("navigating");
     map.off("dragstart", stopFollow);
     layer.remove();
     for (const k of Object.keys(ui)) { ui[k].remove(); delete ui[k]; }
-    if (window.speechSynthesis) speechSynthesis.cancel();
   }
 
   // manual fixes: tap the map
@@ -447,5 +306,5 @@ const Nav = (() => {
   });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && tapArmed) armTap(false); });
 
-  return { start, stop, fix, resect, get active() { return active; } };
+  return { start, stop, fix, get active() { return active; } };
 })();

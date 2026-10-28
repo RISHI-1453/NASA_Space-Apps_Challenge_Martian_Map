@@ -6,3 +6,4 @@ data/*.tif
 data/*.part
 data/rover/
 data/esri_dem/
+data/imagery/

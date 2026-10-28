@@ -1,0 +1,558 @@
+{
+ "source": "OrbitStudio travel list (orbitstudio3d.com), via the OrbitStudio connector, 2026-10-28",
+ "groups": [
+  "Landing Sites",
+  "Volcanoes",
+  "Valles Marineris",
+  "Craters",
+  "Channels and Fossae",
+  "Plains and Basins",
+  "Polar Caps"
+ ],
+ "landmarks": [
+  {
+   "id": "alba_mons",
+   "name": "Alba Mons",
+   "group": "Volcanoes",
+   "lat": 41.08,
+   "lon": -110.71,
+   "box_km": [
+    475,
+    631
+   ],
+   "description": "Alba Mons is a very broad, low volcano north of the Tharsis volcanoes, about 548 km across in the IAU Gazetteer; its lava flows spread much further."
+  },
+  {
+   "id": "arsia_mons",
+   "name": "Arsia Mons",
+   "group": "Volcanoes",
+   "lat": -8.26,
+   "lon": -120.09,
+   "box_km": [
+    535,
+    541
+   ],
+   "description": "Arsia Mons is a shield volcano about 470 km across, the southernmost of the three Tharsis Montes, with a large summit caldera."
+  },
+  {
+   "id": "ascraeus_mons",
+   "name": "Ascraeus Mons",
+   "group": "Volcanoes",
+   "lat": 11.92,
+   "lon": -104.08,
+   "box_km": [
+    514,
+    525
+   ],
+   "description": "Ascraeus Mons is a shield volcano about 456 km across, the northernmost of the three Tharsis Montes."
+  },
+  {
+   "id": "elysium_mons",
+   "name": "Elysium Mons",
+   "group": "Volcanoes",
+   "lat": 25.02,
+   "lon": 147.21,
+   "box_km": [
+    418,
+    461
+   ],
+   "description": "Elysium Mons is a shield volcano about 401 km across, the main volcano of the Elysium volcanic region."
+  },
+  {
+   "id": "olympus_mons",
+   "name": "Olympus Mons",
+   "group": "Volcanoes",
+   "lat": 18.65,
+   "lon": -133.8,
+   "box_km": [
+    665,
+    702
+   ],
+   "description": "Olympus Mons' summit is 21,290 m above the Mars datum, about 22,000 m above the plains at its base. It is 600 km wide, at 18.65° N, 133.80° W.",
+   "page": "https://orbitstudio3d.com/mars/olympus-mons"
+  },
+  {
+   "id": "pavonis_mons",
+   "name": "Pavonis Mons",
+   "group": "Volcanoes",
+   "lat": 1.48,
+   "lon": -112.96,
+   "box_km": [
+    422,
+    422
+   ],
+   "description": "Pavonis Mons is a shield volcano about 366 km across, the middle one of the three Tharsis Montes, sitting almost on the equator."
+  },
+  {
+   "id": "candor_chasma",
+   "name": "Candor Chasma",
+   "group": "Valles Marineris",
+   "lat": -6.53,
+   "lon": -70.78,
+   "box_km": [
+    926,
+    932
+   ],
+   "description": "Candor Chasma is a canyon about 811 km long in the central part of Valles Marineris, north of Melas Chasma."
+  },
+  {
+   "id": "hebes_chasma",
+   "name": "Hebes Chasma",
+   "group": "Valles Marineris",
+   "lat": -1.07,
+   "lon": -76.06,
+   "box_km": [
+    364,
+    364
+   ],
+   "description": "Hebes Chasma is an enclosed canyon about 317 km long north of the main Valles Marineris system, with a large mesa in its middle."
+  },
+  {
+   "id": "melas_chasma",
+   "name": "Melas Chasma",
+   "group": "Valles Marineris",
+   "lat": -10.52,
+   "lon": -72.54,
+   "box_km": [
+    638,
+    648
+   ],
+   "description": "Melas Chasma is a canyon about 564 km long in the middle of Valles Marineris, one of the widest parts of the system."
+  },
+  {
+   "id": "noctis_labyrinthus",
+   "name": "Noctis Labyrinthus",
+   "group": "Valles Marineris",
+   "lat": -6.36,
+   "lon": -101.19,
+   "box_km": [
+    1178,
+    1185
+   ],
+   "description": "Noctis Labyrinthus is a maze of intersecting troughs about 1,190 km across at the western end of Valles Marineris."
+  },
+  {
+   "id": "valles_marineris",
+   "name": "Valles Marineris",
+   "group": "Valles Marineris",
+   "lat": -14.01,
+   "lon": -58.59,
+   "box_km": [
+    1150,
+    1185
+   ],
+   "description": "Valles Marineris is about 4,000 km long, up to 600 km wide and 11 km deep below the plateau, centred at 14.01° S, 58.59° W on Mars.",
+   "page": "https://orbitstudio3d.com/mars/valles-marineris"
+  },
+  {
+   "id": "endeavour_crater",
+   "name": "Endeavour Crater",
+   "group": "Craters",
+   "lat": -2.28,
+   "lon": -5.2,
+   "box_km": [
+    118,
+    119
+   ],
+   "description": "Endeavour is an impact crater about 22 km across in Meridiani Planum; the Opportunity rover explored its rim from 2011 until the end of its mission in 2018."
+  },
+  {
+   "id": "gale_crater",
+   "name": "Gale Crater",
+   "group": "Craters",
+   "lat": -5.37,
+   "lon": 137.81,
+   "box_km": [
+    176,
+    177
+   ],
+   "description": "Gale Crater is 154 km across, with Mount Sharp at its center — Curiosity's crater.",
+   "page": "https://orbitstudio3d.com/mars/gale-crater"
+  },
+  {
+   "id": "gusev_crater",
+   "name": "Gusev Crater",
+   "group": "Craters",
+   "lat": -14.53,
+   "lon": 175.52,
+   "box_km": [
+    176,
+    181
+   ],
+   "description": "Gusev is an impact crater about 158 km across where the Spirit rover landed in 2004. Named after the Russian astronomer Matvei Gusev."
+  },
+  {
+   "id": "huygens_crater",
+   "name": "Huygens Crater",
+   "group": "Craters",
+   "lat": -13.88,
+   "lon": 55.58,
+   "box_km": [
+    521,
+    537
+   ],
+   "description": "Huygens is a large impact crater about 467 km across in the southern highlands. Named after the Dutch astronomer Christiaan Huygens."
+  },
+  {
+   "id": "jezero_crater",
+   "name": "Jezero Crater",
+   "group": "Craters",
+   "lat": 18.41,
+   "lon": 77.69,
+   "box_km": [
+    112,
+    119
+   ],
+   "description": "Jezero Crater is 45 km across and once held a lake — Perseverance's crater, with its river delta.",
+   "page": "https://orbitstudio3d.com/mars/jezero-crater"
+  },
+  {
+   "id": "korolev_crater",
+   "name": "Korolev Crater",
+   "group": "Craters",
+   "lat": 72.77,
+   "lon": 164.58,
+   "box_km": [
+    35,
+    119
+   ],
+   "description": "Korolev is an impact crater about 81 km across near the north pole, filled with a mound of water ice all year round. Named after the Soviet rocket engineer Sergei Korolev."
+  },
+  {
+   "id": "lomonosov_crater",
+   "name": "Lomonosov Crater",
+   "group": "Craters",
+   "lat": 65.04,
+   "lon": -9.24,
+   "box_km": [
+    64,
+    151
+   ],
+   "description": "Lomonosov is an impact crater about 130 km across in the northern plains. Named after the Russian scientist Mikhail Lomonosov."
+  },
+  {
+   "id": "schiaparelli_crater",
+   "name": "Schiaparelli Crater",
+   "group": "Craters",
+   "lat": -2.71,
+   "lon": 16.77,
+   "box_km": [
+    527,
+    528
+   ],
+   "description": "Schiaparelli is a large impact crater about 458 km across near the equator. Named after the Italian astronomer Giovanni Schiaparelli."
+  },
+  {
+   "id": "ares_vallis",
+   "name": "Ares Vallis",
+   "group": "Channels and Fossae",
+   "lat": 10.29,
+   "lon": -25.61,
+   "box_km": [
+    1166,
+    1185
+   ],
+   "description": "Ares Vallis is an outflow channel about 1,760 km long carved by ancient floods; Mars Pathfinder landed near its mouth in 1997."
+  },
+  {
+   "id": "cerberus_fossae",
+   "name": "Cerberus Fossae",
+   "group": "Channels and Fossae",
+   "lat": 11.28,
+   "lon": 166.37,
+   "box_km": [
+    1163,
+    1185
+   ],
+   "description": "Cerberus Fossae is a set of young fissures about 1,240 km long in Elysium Planitia, the source of many of the marsquakes InSight recorded."
+  },
+  {
+   "id": "kasei_valles",
+   "name": "Kasei Valles",
+   "group": "Channels and Fossae",
+   "lat": 25.14,
+   "lon": -62.88,
+   "box_km": [
+    1073,
+    1185
+   ],
+   "description": "Kasei Valles is one of the largest outflow channel systems on Mars, about 1,580 km long, draining into Chryse Planitia."
+  },
+  {
+   "id": "mawrth_vallis",
+   "name": "Mawrth Vallis",
+   "group": "Channels and Fossae",
+   "lat": 22.43,
+   "lon": -16.97,
+   "box_km": [
+    675,
+    730
+   ],
+   "description": "Mawrth Vallis is an ancient channel about 635 km long, known for its layered, clay-rich rocks."
+  },
+  {
+   "id": "nili_fossae",
+   "name": "Nili Fossae",
+   "group": "Channels and Fossae",
+   "lat": 22.02,
+   "lon": 76.69,
+   "box_km": [
+    776,
+    837
+   ],
+   "description": "Nili Fossae is a set of long troughs about 728 km long on the north-western rim of the Isidis basin, near Jezero crater."
+  },
+  {
+   "id": "argyre_planitia",
+   "name": "Argyre Planitia",
+   "group": "Plains and Basins",
+   "lat": -49.84,
+   "lon": -43.31,
+   "box_km": [
+    662,
+    1027
+   ],
+   "description": "Argyre Planitia is a plain about 893 km across on the floor of the Argyre impact basin in the southern highlands."
+  },
+  {
+   "id": "chryse_planitia",
+   "name": "Chryse Planitia",
+   "group": "Plains and Basins",
+   "lat": 28.43,
+   "lon": -40.31,
+   "box_km": [
+    1043,
+    1185
+   ],
+   "description": "Chryse Planitia is a smooth plain about 1,540 km across where large outflow channels end; Viking 1 landed on it in 1976."
+  },
+  {
+   "id": "elysium_planitia",
+   "name": "Elysium Planitia",
+   "group": "Plains and Basins",
+   "lat": 2.98,
+   "lon": 154.74,
+   "box_km": [
+    1184,
+    1185
+   ],
+   "description": "Elysium Planitia is a broad plain about 3,000 km across near the equator; the InSight lander set down on it in 2018."
+  },
+  {
+   "id": "hellas_planitia",
+   "name": "Hellas Planitia",
+   "group": "Plains and Basins",
+   "lat": -42.43,
+   "lon": 70.5,
+   "box_km": [
+    875,
+    1185
+   ],
+   "description": "Hellas Planitia is the plain on the floor of the Hellas impact basin, about 2,300 km across and nearly 9 km deep, one of the largest impact basins in the Solar System."
+  },
+  {
+   "id": "isidis_planitia",
+   "name": "Isidis Planitia",
+   "group": "Plains and Basins",
+   "lat": 13.94,
+   "lon": 88.38,
+   "box_km": [
+    1151,
+    1185
+   ],
+   "description": "Isidis Planitia is a plain about 1,220 km across inside an ancient impact basin; Beagle 2 landed on it in 2003."
+  },
+  {
+   "id": "meridiani_planum",
+   "name": "Meridiani Planum",
+   "group": "Plains and Basins",
+   "lat": -0.04,
+   "lon": -3.14,
+   "box_km": [
+    1185,
+    1185
+   ],
+   "description": "Meridiani Planum is a plain about 1,060 km across on the equator where the Opportunity rover landed in 2004 and found evidence of water in the planet's past."
+  },
+  {
+   "id": "syrtis_major_planum",
+   "name": "Syrtis Major Planum",
+   "group": "Plains and Basins",
+   "lat": 9.2,
+   "lon": 67.1,
+   "box_km": [
+    1170,
+    1185
+   ],
+   "description": "Syrtis Major Planum is a dark volcanic plain about 1,210 km across, the first surface feature recorded on another planet (Christiaan Huygens drew it in 1659)."
+  },
+  {
+   "id": "utopia_planitia",
+   "name": "Utopia Planitia",
+   "group": "Plains and Basins",
+   "lat": 46.74,
+   "lon": 117.52,
+   "box_km": [
+    812,
+    1185
+   ],
+   "description": "Utopia Planitia is a vast plain about 3,560 km across in the northern lowlands, inside a huge impact basin; Viking 2 landed on it in 1976 and China's Zhurong rover in 2021."
+  },
+  {
+   "id": "planum_australe",
+   "name": "Planum Australe",
+   "group": "Polar Caps",
+   "lat": -83.35,
+   "lon": 157.7,
+   "box_km": [
+    90,
+    776
+   ],
+   "description": "Planum Australe is the plateau of layered ice and dust around Mars's south pole, topped by a cap of frozen carbon dioxide."
+  },
+  {
+   "id": "planum_boreum",
+   "name": "Planum Boreum",
+   "group": "Polar Caps",
+   "lat": 87.32,
+   "lon": 54.96,
+   "box_km": [
+    14,
+    306
+   ],
+   "description": "Planum Boreum is the plateau of layered water ice and dust around Mars's north pole."
+  },
+  {
+   "id": "beagle_2",
+   "name": "Beagle 2",
+   "group": "Landing Sites",
+   "lat": 11.52879,
+   "lon": 90.43139,
+   "box_km": [
+    116,
+    119
+   ],
+   "description": "The British Beagle 2 lander, carried by ESA's Mars Express, landed here in Isidis Planitia on 25 December 2003 and was never heard from; HiRISE images found it in 2015 with its solar panels only partly opened."
+  },
+  {
+   "id": "curiosity",
+   "name": "Curiosity",
+   "group": "Landing Sites",
+   "lat": -4.5895,
+   "lon": 137.4417,
+   "box_km": [
+    118,
+    119
+   ],
+   "description": "NASA's Curiosity rover landed here in Gale crater on 6 August 2012 (UTC), near Mount Sharp, the mound in the crater's center."
+  },
+  {
+   "id": "insight",
+   "name": "InSight",
+   "group": "Landing Sites",
+   "lat": 4.502384,
+   "lon": 135.623447,
+   "box_km": [
+    118,
+    119
+   ],
+   "description": "NASA's InSight lander set down here in western Elysium Planitia on 26 November 2018 to study the planet's interior and record marsquakes."
+  },
+  {
+   "id": "opportunity",
+   "name": "Opportunity",
+   "group": "Landing Sites",
+   "lat": -1.9462,
+   "lon": -5.5266,
+   "box_km": [
+    118,
+    119
+   ],
+   "description": "NASA's Opportunity rover landed here in Meridiani Planum, inside the small Eagle crater, on 25 January 2004 (UTC)."
+  },
+  {
+   "id": "pathfinder",
+   "name": "Pathfinder",
+   "group": "Landing Sites",
+   "lat": 19.0949,
+   "lon": -33.2528,
+   "box_km": [
+    112,
+    119
+   ],
+   "description": "NASA's Mars Pathfinder landed here in Ares Vallis on 4 July 1997 and released Sojourner, the first rover on Mars."
+  },
+  {
+   "id": "perseverance",
+   "name": "Perseverance",
+   "group": "Landing Sites",
+   "lat": 18.444627,
+   "lon": 77.450886,
+   "box_km": [
+    112,
+    119
+   ],
+   "description": "NASA's Perseverance rover landed here in Jezero crater on 18 February 2021, carrying the Ingenuity helicopter."
+  },
+  {
+   "id": "phoenix",
+   "name": "Phoenix",
+   "group": "Landing Sites",
+   "lat": 68.218394,
+   "lon": -125.75129,
+   "box_km": [
+    44,
+    119
+   ],
+   "description": "NASA's Phoenix lander set down here in Vastitas Borealis, the northern plains at about 68 degrees north, on 25 May 2008 (UTC)."
+  },
+  {
+   "id": "spirit",
+   "name": "Spirit",
+   "group": "Landing Sites",
+   "lat": -14.5692,
+   "lon": 175.4729,
+   "box_km": [
+    115,
+    119
+   ],
+   "description": "NASA's Spirit rover landed here in Gusev crater on 4 January 2004 (UTC)."
+  },
+  {
+   "id": "viking_1",
+   "name": "Viking 1",
+   "group": "Landing Sites",
+   "lat": 22.2692,
+   "lon": -47.9507,
+   "box_km": [
+    110,
+    119
+   ],
+   "description": "NASA's Viking 1 lander set down here in western Chryse Planitia on 20 July 1976, the first successful US landing on Mars."
+  },
+  {
+   "id": "viking_2",
+   "name": "Viking 2",
+   "group": "Landing Sites",
+   "lat": 47.6673,
+   "lon": 134.2809,
+   "box_km": [
+    80,
+    119
+   ],
+   "description": "NASA's Viking 2 lander set down here in Utopia Planitia on 3 September 1976."
+  },
+  {
+   "id": "zhurong",
+   "name": "Zhurong",
+   "group": "Landing Sites",
+   "lat": 25.066,
+   "lon": 109.925,
+   "box_km": [
+    107,
+    119
+   ],
+   "description": "China's Zhurong rover, part of the Tianwen-1 mission, landed here in southern Utopia Planitia on 14 May 2021 (UTC)."
+  }
+ ]
+}

@@ -43,14 +43,6 @@ const MarsTime = (() => {
     return { lmst, ltst, sunElevation: deg(Math.asin(sinAlt)) };
   }
 
-  // sun elevation & azimuth (° clockwise from north) at a latitude and local true solar time
-  function sunAt(lat, ltst, t = compute()) {
-    const H = rad((ltst - 12) * 15), d = rad(t.decl), p = rad(lat);
-    const el = Math.asin(Math.sin(p) * Math.sin(d) + Math.cos(p) * Math.cos(d) * Math.cos(H));
-    const az = Math.atan2(-Math.cos(d) * Math.sin(H), Math.sin(d) * Math.cos(p) - Math.cos(d) * Math.sin(p) * Math.cos(H));
-    return { elevation: deg(el), azimuth: mod(deg(az), 360) };
-  }
-
   // Earth–Mars distance, one-way radio light-time and the Sun–Earth–Mars angle, from JPL's
   // approximate Keplerian elements (Standish, valid 1800–2050) — good to a few light-seconds.
   const ORBITS = { // a (AU), e, I, L, long. perihelion, long. node — and rates per century
@@ -90,5 +82,5 @@ const MarsTime = (() => {
     return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
   };
 
-  return { compute, local, sunAt, earth, season, hhmm };
+  return { compute, local, earth, season, hhmm };
 })();

@@ -4,15 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Martian Map · Code Huzzlers</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:ital,opsz,wght@0,9..144,300;1,9..144,300&display=swap" rel="stylesheet">
+  <!-- open connections early; nothing below blocks the first paint except the two small stylesheets -->
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://trek.nasa.gov">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:ital,opsz,wght@0,9..144,300;1,9..144,300&display=swap" media="print" onload="this.media='all'">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="intro.css">
   <script type="importmap">{ "imports": {
     "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
     "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/" } }</script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </head>
 <body>
   <header>
@@ -86,7 +90,18 @@
         <div class="legend">
           <span><i class="dot lander"></i>Landers &amp; rovers</span>
           <span><i class="dot candidate"></i>Candidate human sites</span>
+          <span><i class="lm-key">◆</i>Landmarks</span>
         </div>
+      </section>
+
+      <section data-tab="sites">
+        <h2>Landmarks of Mars</h2>
+        <p class="muted small lm-intro">Mars' major volcanoes, canyons, craters, basins, polar caps and every landing site.
+          Plan a walk to any of them, see it in 3D, or <b>🖨 print a relief model</b> of it to brief the crew.</p>
+        <input id="lm-q" type="search" autocomplete="off" placeholder="Filter, e.g. volcano, ice, Gale" aria-label="Filter landmarks">
+        <div id="lm-list"></div>
+        <p class="muted small">Landmark list and descriptions: <a href="https://orbitstudio3d.com/mars/" target="_blank" rel="noopener">OrbitStudio</a>.
+          Elevations: NASA MOLA.</p>
       </section>
 
       <section data-tab="route">
@@ -149,14 +164,15 @@
   </main>
 
   <div id="readout" class="readout"></div>
-  <script src="marstime.js"></script>
-  <script src="suit.js"></script>
-  <script src="science.js"></script>
-  <script src="app.js"></script>
-  <script src="directions.js"></script>
-  <script src="groundview.js"></script>
-  <script src="globe.js"></script>
-  <script src="navigate.js"></script>
+  <script defer src="marstime.js"></script>
+  <script defer src="suit.js"></script>
+  <script defer src="science.js"></script>
+  <script defer src="app.js"></script>
+  <script defer src="directions.js"></script>
+  <script defer src="groundview.js"></script>
+  <script defer src="globe.js"></script>
+  <script defer src="orbit.js"></script>
+  <script defer src="navigate.js"></script>
   <script type="module">
     import { playIntro } from "./intro.js";
     // where the whole planet sits on screen, so the intro's unrolled globe lands exactly on it

@@ -152,19 +152,6 @@ const Science = (() => {
       title: "Pulmonary toxicity of simulated lunar and Martian dusts in mice", venue: "Inhalation Toxicology 14", url: doi("10.1080/08958370290084683"),
       finding: "Mars soil simulant caused more lung inflammation and fibrosis than lunar simulant.",
       use: "Keep dust out of the habitat." },
-    // ---- navigation ----
-    { id: "li2010", topic: "nav", cite: "Li et al. 2010", year: 2010,
-      title: "Development of a lunar astronaut spatial orientation and information system (LASOIS)", venue: "ASPRS / Ohio State University", url: "https://asu.pure.elsevier.com/en/publications/development-of-a-lunar-astronaut-spatial-orientation-and-informat",
-      finding: "Suit IMU + cameras drifted 6 m over a 107 m walk (5.6%) in field tests.",
-      use: "Why regular position fixes matter." },
-    { id: "jiang2012", topic: "nav", cite: "Jiang 2012", year: 2012,
-      title: "Collaborative tracking of image features based on projective invariance (LASOIS)", venue: "PhD thesis, Ohio State University", url: "https://ui.adsabs.harvard.edu/abs/2012PhDT........62J/abstract",
-      finding: "On Apollo 14, spatial disorientation cost the crew time and raised safety concerns; there are few familiar cues on an airless, GPS-less surface.",
-      use: "Why the app offers a two-landmark fix." },
-    { id: "bouyssounouse2016", topic: "nav", cite: "Bouyssounouse et al. 2016", year: 2016,
-      title: "Horizon based orientation estimation for planetary surface navigation", venue: "IEEE ICIP 2016", url: doi("10.1109/ICIP.2016.7533185"),
-      finding: "There's no GPS and usually no compass on Mars (weak magnetic field); heading has to come from the scene or the sky.",
-      use: "Bearings are measured against the Sun, not a compass." },
     // ---- maps & time ----
     { id: "allison2000", topic: "map", cite: "Allison & McEwen 2000", year: 2000,
       title: "A post-Pathfinder evaluation of areocentric solar coordinates with improved timing recipes for Mars seasonal/diurnal climate studies", venue: "Planetary and Space Science 48", url: doi("10.1016/S0032-0633(99)00092-6"),
@@ -180,7 +167,7 @@ const Science = (() => {
       use: "Fallback terrain." },
   ];
   const TOPICS = { walk: "Walking on Mars", eva: "Life support & EVA planning", rad: "Radiation", dust: "Weather & dust",
-    ice: "Water, soil & resources", nav: "Navigating without GPS", map: "Maps & time" };
+    ice: "Water, soil & resources", map: "Maps & time" };
   const BY_ID = Object.fromEntries(REFS.map((r, i) => [r.id, { ...r, n: i + 1 }]));
 
   const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
@@ -353,7 +340,6 @@ const Science = (() => {
       note: `A question to Mission Control and its answer take <b>${(2 * e.lightMin).toFixed(0)} min</b> round trip, so EVA decisions get made on site${cite("marquez2019")}.` };
   }
 
-  document.addEventListener("DOMContentLoaded", renderLibrary);
-  if (document.readyState !== "loading") renderLibrary();
+  renderLibrary(); // scripts are deferred, so the page is already parsed
   return { REFS, cite, open, routeCheck, placeNotes, commsNote, turnBack, LOPE_KMH };
 })();

@@ -78,15 +78,3 @@ def whereis(lat: float, lon: float) -> dict:
     else:
         summary = "Unnamed terrain"
     return {"summary": summary, "inside": inside[:3], "nearest": nearest}
-
-
-def near(lat: float, lon: float, max_km: float = 80, limit: int = 12) -> list[dict]:
-    """Named features within max_km, nearest first, with distance and bearing from the point."""
-    out = []
-    for f in features():
-        d_km = haversine_m((lat, lon), (f["lat"], f["lon"])) / 1000
-        if d_km <= max_km:
-            out.append({**f, "dist_km": round(d_km, 2),
-                        "bearing_deg": round(bearing_deg((lat, lon), (f["lat"], f["lon"])), 1)})
-    out.sort(key=lambda f: f["dist_km"])
-    return out[:limit]

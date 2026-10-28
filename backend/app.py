@@ -2,24 +2,54 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+import imagery
 import places
 import rover
 import terrain
 
 ROOT = Path(__file__).resolve().parent.parent
+log = logging.getLogger("uvicorn.error")
 app = FastAPI(title="Martian Map")
+app.add_middleware(GZipMiddleware, minimum_size=800)  # the JS, CSS, JSON and terrain tiles shrink 3-4x
+LONG_CACHE = "public, max-age=2592000, immutable"     # tiles never change: browsers keep them 30 days
 
 
 @app.get("/api/sites")
 def sites():
     return json.loads((ROOT / "data" / "sites.json").read_text(encoding="utf-8"))
+
+
+@app.get("/api/landmarks")
+def landmarks():
+    """Mars' major landmarks (OrbitStudio's travel list), each with its MOLA elevation."""
+    out = json.loads((ROOT / "data" / "landmarks.json").read_text(encoding="utf-8"))
+    for lm in out["landmarks"]:
+        lm["elev_m"] = round(terrain.mola_elevation(lm["lat"], lm["lon"]))
+    return out
+
+
+@app.get("/api/imagery/{layer}/{z}/{y}/{x}")
+def imagery_tile(layer: str, z: int, y: int, x: int):
+    """The sharpest imagery layers for the 3D globe, re-encoded as small WebP tiles."""
+    if layer not in imagery.LAYERS or not (0 <= z <= imagery.MAX_Z[layer] and 0 <= x < 2 ** (z + 1) and 0 <= y < 2 ** z):
+        raise HTTPException(404, "no such tile")
+    try:
+        data = imagery.tile(layer, z, x, y)
+    except imagery.Missing:
+        raise HTTPException(404, "outside this layer's coverage")
+    except Exception as e:
+        log.warning("imagery %s/%s/%s/%s failed: %r", layer, z, y, x, e)
+        raise HTTPException(502, "imagery source unavailable")
+    return Response(data, media_type="image/webp", headers={"Cache-Control": LONG_CACHE})
 
 
 @app.get("/api/elevation")
@@ -36,12 +66,6 @@ def elevation(lat: float, lon: float, quick: bool = False):
 def places_search(q: str, limit: int = 8):
     """Search IAU-named Mars features (craters, mountains, valleys...)."""
     return places.search(q, min(limit, 20))
-
-
-@app.get("/api/places/near")
-def places_near(lat: float, lon: float, max_km: float = 80, limit: int = 12):
-    """Named features near a point (nearest first) — landmarks for a bearings fix."""
-    return places.near(lat, lon, min(max_km, 500), min(limit, 50))
 
 
 @app.get("/api/whereis")
@@ -83,7 +107,7 @@ def terrain_tile(z: int, x: int, y: int):
     stand_in = z >= terrain.NET_LEVEL and src == terrain.MOLA_LABEL
     return Response(data, media_type="application/octet-stream",
                     headers={"X-Source": src, "Access-Control-Expose-Headers": "X-Source",
-                             "Cache-Control": "public, max-age=120" if stand_in else "public, max-age=2592000, immutable"})
+                             "Cache-Control": "public, max-age=120" if stand_in else LONG_CACHE})
 
 
 @app.get("/api/features")

@@ -46,7 +46,7 @@ for (let lon = -150; lon <= 180; lon += 30)
 const sitesLayer = L.layerGroup().addTo(map);
 const routeLayer = L.layerGroup().addTo(map);
 const demLayer = L.layerGroup().addTo(map);
-L.control.layers(baseLayers, { ...hiresLayers, "Sites": sitesLayer, "High-res terrain area": demLayer, "Lat/Lon grid": graticule, "Route": routeLayer },
+const layersControl = L.control.layers(baseLayers, { ...hiresLayers, "Sites": sitesLayer, "High-res terrain area": demLayer, "Lat/Lon grid": graticule, "Route": routeLayer },
   { position: "topleft" }).addTo(map);
 L.control.scale({ imperial: false }).addTo(map); // note: scale assumes Earth radius — see README
 
@@ -85,7 +85,8 @@ fetch("/api/sites").then((r) => r.json()).then(({ sites }) => {
       box.innerHTML = `<div class="pn">${s.name}</div><div class="pm">${s.region}${s.mission ? ` · ${s.mission} (${s.year})` : ""}` +
         `${s.why ? `<br>${s.why}` : ""}<br>${s.lat.toFixed(4)}°, ${s.lon.toFixed(4)}°E</div>`;
       box.appendChild(Dir.actions([s.lat, s.lon], s.name, { close: () => mk.closePopup() }));
-      if (typeof GroundView !== "undefined") box.appendChild(GroundView.button(s.lat, s.lon, s.name));
+      box.appendChild(GroundView.button(s.lat, s.lon, s.name));
+      box.appendChild(Orbit.button(s.lat, s.lon, s.name));
       return box;
     });
     const o = document.createElement("option");
@@ -246,6 +247,7 @@ async function analyse() {
   $("summary").innerHTML = `<div class="calc"><span class="gv-spin"></span>Calculating route ${names[0]} → ${names[n - 1]}…</div>`;
   $("directions").innerHTML = "";
   showTab("route");
+  loadChart().catch(() => {}); // fetch the chart library while the server works out the route
   let p;
   try {
     const r = await fetch("/api/profile", {
@@ -370,13 +372,20 @@ function renderPanel(p, labels) {
     <div class="verdict ${cls}">${verdict}</div>
     <div class="row go-row">
       <button id="nav-start" class="go">▶ Start Marswalk — live guidance</button>
-      <button id="walk-3d" class="go alt" title="Fly along the route at eye level">⛰ Walk it in 3D</button>
+      <button id="walk-3d" class="go alt" title="Fly along the route in 3D">⛰ Walk it in 3D</button>
+      <button id="print-model" class="go alt" title="3D-print a relief model of this walk area (OrbitStudio)">🖨 Print model</button>
     </div>
     ${sci ? sci.html : ""}`;
   drawWalkback(p, sci);
   $("nav-start").onclick = () => Nav.start();
   if (rover) { $("nav-start").disabled = true; $("nav-start").title = "Live guidance is for walks on foot"; }
   $("walk-3d").onclick = () => Globe.walk();
+  $("print-model").onclick = () => {
+    const S = p.samples, la = S.map((x) => x.lat), lo = S.map((x) => x.lon);
+    const s = Math.min(...la), n = Math.max(...la), w = Math.min(...lo), e = Math.max(...lo);
+    const span = Math.max((n - s) * 59.16, (e - w) * 59.16 * Math.cos(((n + s) / 2) * D2R));
+    Orbit.openPrint({ lat: (s + n) / 2, lon: (w + e) / 2, name: `${names[0]} → ${names[waypoints.length - 1]}`, spanKm: span });
+  };
 
   // turn-by-turn
   const el = $("directions");
@@ -469,7 +478,18 @@ function drawWalkback(p, sci) {
 Suit.onChange(() => { if (lastProfile) { renderPanel(lastProfile, lastLabels); drawRoute(lastProfile, waypoints.length - 1); } });
 
 // ---------- elevation profile ----------
-function drawProfile(p, labels) {
+// Chart.js is only needed once a route exists, so it isn't part of the page's first load
+let chartLib = null;
+const loadChart = () => chartLib || (chartLib = new Promise((ok, fail) => {
+  const s = document.createElement("script");
+  s.src = "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js";
+  s.onload = ok;
+  s.onerror = () => { chartLib = null; fail(new Error("chart library")); };
+  document.head.appendChild(s);
+}));
+async function drawProfile(p, labels) {
+  try { await loadChart(); } catch { return; }
+  if (p !== lastProfile) return; // a newer route arrived while the library loaded
   $("profile-wrap").hidden = false;
   const samples = p.samples;
   const stops = [0, ...p.legs.map((l) => l.to_idx)];
@@ -587,6 +607,7 @@ async function setMe(lat, lon, { fly = true, save = true } = {}) {
   $("me-card").className = "me-card set";
   $("me-card").innerHTML = `<div class="where">Locating…</div><div class="muted">${fmtLatLon(lat, lon)}</div>`;
   updateConditions(lat, lon, "Your position");
+  if (typeof Orbit !== "undefined") Orbit.refresh(); // landmark distances are measured from you
   const w = await whereis(lat, lon);
   if (!w || me[0] !== lat || me[1] !== lon) return;
   $("me-card").innerHTML = `<div class="where">${w.summary}</div>
@@ -637,6 +658,7 @@ async function showPlace(lat, lon, title, meta, zoom) {
   const placeName = title === "Dropped pin" || title === "Coordinates" ? null : title;
   box.appendChild(Dir.actions([lat, lon], placeName, { close: () => { map.closePopup(); searchLayer.clearLayers(); } }));
   box.appendChild(GroundView.button(lat, lon, placeName || "Dropped pin"));
+  box.appendChild(Orbit.button(lat, lon, placeName || "Dropped pin"));
   pin.bindPopup(box, { className: "", maxWidth: 260 });
   if (zoom !== undefined) map.flyTo([lat, lon], zoom);
   pin.openPopup();

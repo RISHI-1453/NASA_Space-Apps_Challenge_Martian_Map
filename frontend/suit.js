@@ -131,8 +131,7 @@ const Suit = (() => {
     f.addEventListener("submit", (e) => e.preventDefault());
     document.getElementById("suit-reset")?.addEventListener("click", () => set({ o2Pct: 100, batteryPct: 100, waterPct: 100, co2Hours: 8, heartRate: "" }));
   }
-  document.addEventListener("DOMContentLoaded", () => { bindForm(); renderSummary(); });
-  if (document.readyState !== "loading") { bindForm(); renderSummary(); }
+  bindForm(); renderSummary(); // scripts are deferred, so the form is already in the page
 
   const rates = (w) => Object.fromEntries(RES.map((r) => [r.key, RATE[r.key](w)])); // per hour at power w
   const FULL = { o2: CAP.o2Kg, co2: 8, battery: CAP.batteryWh, water: CAP.waterKg };       // a full suit

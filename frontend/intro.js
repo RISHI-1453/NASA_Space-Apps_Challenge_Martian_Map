@@ -199,7 +199,8 @@ export function playIntro({ onDone, mapRect, autoplay = true } = {}) {
   const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 1, 0.55, 0.78);
   composer.addPass(renderPass); composer.addPass(bloom); composer.addPass(new OutputPass());
   function resize() {
-    const w = root.clientWidth, h = root.clientHeight, pr = Math.min(1.75, window.devicePixelRatio);
+    // capped at 1.25: the bloom pass costs per pixel, and laptop GPUs were struggling at 2x
+    const w = root.clientWidth, h = root.clientHeight, pr = Math.min(1.25, window.devicePixelRatio);
     renderer.setPixelRatio(pr); renderer.setSize(w, h, false);
     composer.setPixelRatio(pr); composer.setSize(w, h);
     camera.aspect = w / h;
