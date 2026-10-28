@@ -85,13 +85,22 @@ The route summary shows the share of each supply the walk uses and names the **l
   - Cesium won't draw terrain while the camera is below its ellipsoid, and Mars' lowlands sit up to 8 km below the datum. So the engine's sphere sits 10 km under the datum and every height is raised to match.
   - Cesium sizes ground-draped lines from a table of Earth's terrain heights, which is replaced with one range that holds all of Mars.
 
-**3D-printed relief models (OrbitStudio, `frontend/orbit.js`):** a model you can hold lets the crew brief an EVA around a table (trace the route, point at the steep parts, agree where to turn back), much as Apollo crews studied relief models of their landing sites.
-- **🖨 Print model** is on the route summary, on every site, landmark and place card, and in the 3D view.
-- It opens [OrbitStudio](https://orbitstudio3d.com), which turns NASA elevation data into an STL or multicolour 3MF model for a habitat or home 3D printer.
-- When the area lies inside one of OrbitStudio's known places, the link opens there with a 20 cm square model and relief ×2 filled in. Otherwise it gives the coordinates to paste into *Jump to Coordinates*.
-- The dialog explains the limits: the smallest Mars model is 24 km across, small features don't show, and generating and previewing is free while downloading the print file needs an OrbitStudio plan or credit.
+**3D-printed relief models (`frontend/printmodel.js`), built in the app:** a model you can hold lets the crew brief an EVA around a table (follow the walk, point at the steep parts, agree where to turn back), much as Apollo crews studied relief models of their landing sites.
+- **🖨 Print model** is on the route summary, on every site, landmark and place card, and in the 3D view. It opens a dialog in the app, with no other website involved.
+- **Data:** the model is made from the same NASA elevation the planner uses, from `/api/terrain/area`:
+  - The 20 m CTX DTM in Jezero.
+  - The HRSC/MOLA 200 m blend for areas up to 200 km across.
+  - MOLA for bigger areas, up to 1,200 km (a whole volcano or basin).
+- **For a planned walk:** the route is raised 0.8 mm on the model with a bump at every stop, so it can be traced with a finger.
+- **Options:**
+  - Size: 100–250 mm.
+  - Heights: ×1–×10, picked automatically to give at least 10 mm of relief.
+  - Area: for places, with the landmark's own size offered exactly.
+  - Detail: 160 or 256 samples.
+- **Preview and stats:** a 3D preview you can drag to turn, plus the scale (e.g. "1 mm = 51 m on Mars"), height range, triangle count and file size.
+- **⬇ Download STL:** a binary STL that prints flat on its 3 mm base with no supports. It is a closed, watertight solid: every edge is shared by exactly two triangles, and the faces point outward.
 
-**Landmarks of Mars (Sites tab and map ◆):** OrbitStudio's travel list of 45 places: volcanoes, the Valles Marineris canyons, craters, channels, plains and basins, both polar caps, and every landing site. Each has a description, MOLA elevation, distance from you, and *Fly there*, *Directions*, *🌐 3D* and *🖨 Print model*. The list is filterable, and the map layer toggles in the layers control. The data (`data/landmarks.json`) was collected with the OrbitStudio connector; `/api/landmarks` serves it.
+**Landmarks of Mars (Sites tab and map ◆):** 45 places: volcanoes, the Valles Marineris canyons, craters, channels, plains and basins, both polar caps, and every landing site. Each has a description, MOLA elevation, distance from you, and *Fly there*, *Directions*, *🌐 3D* and *🖨 Print model*. The list is filterable, and the map layer toggles in the layers control. The list and descriptions come from OrbitStudio's Mars travel list (collected with the OrbitStudio connector into `data/landmarks.json`, served by `/api/landmarks`).
 
 **Ground view (Street View for Mars):**
 - **Rover photos:** finds the nearest Perseverance or Curiosity stop within 3 km (from NASA's MMGIS rover-traverse data). It lays out that stop's Navcam frames around 360° by the mast azimuth and elevation recorded with each frame (NASA raw-image APIs). Drag to look around, scroll to zoom, and click a frame for full size. This covers Jezero (Perseverance) and Gale (Curiosity).
@@ -156,7 +165,7 @@ The route summary shows the share of each supply the walk uses and names the **l
 ```
 backend/app.py       FastAPI: /api/sites, /api/landmarks, /api/places, /api/whereis, /api/elevation, /api/dem,
                      /api/profile, /api/rover/nearest, /api/rover/photos, /api/rover/track,
-                     /api/terrain/tile/{z}/{x}/{y}, /api/imagery/{layer}/{z}/{y}/{x}, /api/features
+                     /api/terrain/tile/{z}/{x}/{y}, /api/terrain/area, /api/imagery/{layer}/{z}/{y}/{x}, /api/features
 backend/places.py    IAU place-name search + "where am I" descriptions
 backend/globaldem.py 200 m global DEM as cached LERC tiles (USGS HRSC/MOLA blend, hosted by Esri)
 backend/imagery.py   the sharpest imagery layers for the 3D view, re-encoded once as small WebP tiles
@@ -171,7 +180,8 @@ frontend/science.js  the 38 cited sources, route research check, walk-back / poi
 frontend/groundview.js  rover photos look-around (hands 3D over to globe.js)
 frontend/globe.js    the 3D Mars globe (CesiumJS): streaming terrain + imagery, route, sites, names, rover tracks, fly-along
 frontend/navigate.js live guidance: route snapping, off-route, next turn, O2/turn-back
-frontend/orbit.js    OrbitStudio: 🖨 3D-print a relief model of an area; the 45 Mars landmarks guide
+frontend/printmodel.js  🖨 3D-printable relief models: area → mesh (route raised) → preview → binary STL
+frontend/landmarks.js   the 45 Mars landmarks guide (map layer + Sites tab)
 data/                sites.json, landmarks.json (OrbitStudio), mars_features.json; MOLA grid + Jezero DTM and the
                      tile caches (downloaded, git-ignored)
 scripts/fetch_data.py      downloads the elevation data

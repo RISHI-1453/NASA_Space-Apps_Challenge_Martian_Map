@@ -122,6 +122,27 @@ def tile_grid(z: int, x: int, y: int, n: int) -> np.ndarray | None:
     return _bilinear(a, fy, fx)
 
 
+def grid(lats: np.ndarray, lons: np.ndarray) -> np.ndarray | None:
+    """Heights on the grid lats (rows) x lons (columns), or None if the area needs too many tiles
+    or a tile can't be had. The tiles covering the area are fetched in parallel."""
+    rows = np.clip(((90 - lats) // SPAN).astype(int), 0, ROWS - 1)
+    cols = np.clip(((lons + 180) // SPAN).astype(int), 0, COLS - 1)
+    keys = [(r, c) for r in np.unique(rows) for c in np.unique(cols)]
+    if len(keys) > MAX_PREFETCH:
+        return None
+    tiles = dict(zip(keys, _pool.map(lambda rc: tile(*rc), keys)))
+    if any(a is None for a in tiles.values()):
+        return None
+    out = np.empty((len(lats), len(lons)), dtype=np.float32)
+    for (r, c), a in tiles.items():
+        ri, ci = np.flatnonzero(rows == r), np.flatnonzero(cols == c)
+        fy = (90 - r * SPAN - lats[ri]) / SPAN * N
+        fx = (lons[ci] - (-180 + c * SPAN)) / SPAN * N
+        FY, FX = np.meshgrid(fy, fx, indexing="ij")
+        out[np.ix_(ri, ci)] = _bilinear(a, FY, FX)
+    return out
+
+
 def prefetch(s: float, w: float, n: float, e: float) -> bool:
     """Download (in parallel) the tiles covering an area, if it's not too big."""
     r0, c0 = _rc(n, w)

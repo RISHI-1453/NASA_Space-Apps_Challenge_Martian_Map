@@ -86,7 +86,7 @@ fetch("/api/sites").then((r) => r.json()).then(({ sites }) => {
         `${s.why ? `<br>${s.why}` : ""}<br>${s.lat.toFixed(4)}°, ${s.lon.toFixed(4)}°E</div>`;
       box.appendChild(Dir.actions([s.lat, s.lon], s.name, { close: () => mk.closePopup() }));
       box.appendChild(GroundView.button(s.lat, s.lon, s.name));
-      box.appendChild(Orbit.button(s.lat, s.lon, s.name));
+      box.appendChild(PrintModel.button(s.lat, s.lon, s.name));
       return box;
     });
     const o = document.createElement("option");
@@ -373,7 +373,7 @@ function renderPanel(p, labels) {
     <div class="row go-row">
       <button id="nav-start" class="go">▶ Start Marswalk — live guidance</button>
       <button id="walk-3d" class="go alt" title="Fly along the route in 3D">⛰ Walk it in 3D</button>
-      <button id="print-model" class="go alt" title="3D-print a relief model of this walk area (OrbitStudio)">🖨 Print model</button>
+      <button id="print-model" class="go alt" title="Make a 3D-printable relief model of this walk, with the route raised">🖨 Print model</button>
     </div>
     ${sci ? sci.html : ""}`;
   drawWalkback(p, sci);
@@ -381,10 +381,12 @@ function renderPanel(p, labels) {
   if (rover) { $("nav-start").disabled = true; $("nav-start").title = "Live guidance is for walks on foot"; }
   $("walk-3d").onclick = () => Globe.walk();
   $("print-model").onclick = () => {
-    const S = p.samples, la = S.map((x) => x.lat), lo = S.map((x) => x.lon);
-    const s = Math.min(...la), n = Math.max(...la), w = Math.min(...lo), e = Math.max(...lo);
-    const span = Math.max((n - s) * 59.16, (e - w) * 59.16 * Math.cos(((n + s) / 2) * D2R));
-    Orbit.openPrint({ lat: (s + n) / 2, lon: (w + e) / 2, name: `${names[0]} → ${names[waypoints.length - 1]}`, spanKm: span });
+    // the outbound walk (the way back retraces it) and its stops, to raise on the model
+    const outbound = waypoints.length - 1, S = p.samples.filter((x) => x.leg < outbound);
+    const stops = [0, ...p.legs.slice(0, outbound).map((l) => l.to_idx)];
+    const la = S.map((x) => x.lat), lo = S.map((x) => x.lon);
+    PrintModel.open({ lat: (Math.min(...la) + Math.max(...la)) / 2, lon: (Math.min(...lo) + Math.max(...lo)) / 2,
+      name: `${names[0]} → ${names[outbound]}`, route: { samples: S, stops } });
   };
 
   // turn-by-turn
@@ -607,7 +609,7 @@ async function setMe(lat, lon, { fly = true, save = true } = {}) {
   $("me-card").className = "me-card set";
   $("me-card").innerHTML = `<div class="where">Locating…</div><div class="muted">${fmtLatLon(lat, lon)}</div>`;
   updateConditions(lat, lon, "Your position");
-  if (typeof Orbit !== "undefined") Orbit.refresh(); // landmark distances are measured from you
+  if (typeof Landmarks !== "undefined") Landmarks.refresh(); // landmark distances are measured from you
   const w = await whereis(lat, lon);
   if (!w || me[0] !== lat || me[1] !== lon) return;
   $("me-card").innerHTML = `<div class="where">${w.summary}</div>
@@ -658,7 +660,7 @@ async function showPlace(lat, lon, title, meta, zoom) {
   const placeName = title === "Dropped pin" || title === "Coordinates" ? null : title;
   box.appendChild(Dir.actions([lat, lon], placeName, { close: () => { map.closePopup(); searchLayer.clearLayers(); } }));
   box.appendChild(GroundView.button(lat, lon, placeName || "Dropped pin"));
-  box.appendChild(Orbit.button(lat, lon, placeName || "Dropped pin"));
+  box.appendChild(PrintModel.button(lat, lon, placeName || "Dropped pin", { spanKm: 10 }));
   pin.bindPopup(box, { className: "", maxWidth: 260 });
   if (zoom !== undefined) map.flyTo([lat, lon], zoom);
   pin.openPopup();

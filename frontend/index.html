@@ -97,10 +97,10 @@
       <section data-tab="sites">
         <h2>Landmarks of Mars</h2>
         <p class="muted small lm-intro">Mars' major volcanoes, canyons, craters, basins, polar caps and every landing site.
-          Plan a walk to any of them, see it in 3D, or <b>🖨 print a relief model</b> of it to brief the crew.</p>
+          Plan a walk to any of them, see it in 3D, or make a <b>🖨 3D-printable relief model</b> of it to brief the crew.</p>
         <input id="lm-q" type="search" autocomplete="off" placeholder="Filter, e.g. volcano, ice, Gale" aria-label="Filter landmarks">
         <div id="lm-list"></div>
-        <p class="muted small">Landmark list and descriptions: <a href="https://orbitstudio3d.com/mars/" target="_blank" rel="noopener">OrbitStudio</a>.
+        <p class="muted small">Landmark list and descriptions: OrbitStudio.
           Elevations: NASA MOLA.</p>
       </section>
 
@@ -171,7 +171,8 @@
   <script defer src="directions.js"></script>
   <script defer src="groundview.js"></script>
   <script defer src="globe.js"></script>
-  <script defer src="orbit.js"></script>
+  <script defer src="printmodel.js"></script>
+  <script defer src="landmarks.js"></script>
   <script defer src="navigate.js"></script>
   <script type="module">
     import { playIntro } from "./intro.js";

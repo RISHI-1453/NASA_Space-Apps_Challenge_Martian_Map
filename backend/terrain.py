@@ -203,6 +203,30 @@ def tile_heights(z: int, x: int, y: int) -> tuple[np.ndarray, str]:
     return np.round(h).astype("<i2"), src
 
 
+MODEL_NET_KM = 200   # areas up to this wide get the 200 m blend (<= 16 tiles); bigger ones MOLA, plenty at that scale
+
+
+def area_grid(s: float, w: float, n: float, e: float, nx: int, ny: int) -> tuple[np.ndarray, str]:
+    """nx x ny heights (m) over an area, row 0 = north, from the sharpest data covering it — for
+    3D-printed relief models."""
+    lats, lons = np.linspace(n, s, ny), np.linspace(w, e, nx)
+    wide_km = max(n - s, (e - w) * math.cos(math.radians((n + s) / 2))) * MARS_RADIUS_M * math.pi / 180 / 1000
+    h, src = None, MOLA_LABEL
+    if wide_km <= MODEL_NET_KM:
+        h = globaldem.grid(lats, lons)
+        if h is not None:
+            src = globaldem.LABEL
+    if h is None:
+        h = mola_grid(lats, lons).astype(np.float32)
+    for d in LOCAL_DEMS:
+        if d.overlaps(s, w, n, e):
+            before = h.copy()
+            d.fill(lats, lons, h)
+            if not np.array_equal(before, h):
+                src = d.label if d.bounds[0] <= s and d.bounds[1] <= w and d.bounds[2] >= n and d.bounds[3] >= e else f"{d.label} + {src}"
+    return h.astype(np.float32), src
+
+
 def tile_bytes(z: int, x: int, y: int) -> tuple[bytes, str]:
     key = (z, x, y)
     with _tiles_lock:

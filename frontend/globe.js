@@ -53,7 +53,7 @@ const Globe = (() => {
         <div class="gl-tools">
           <button type="button" data-act="planet" title="Zoom out to the whole planet">🌐 Planet</button>
           <button type="button" data-act="here" title="Back to the place this view opened on">📍 Here</button>
-          <button type="button" data-act="print" title="3D-print a relief model of this area (OrbitStudio)">🖨 Print model</button>
+          <button type="button" data-act="print" title="Make a 3D-printable relief model of this area">🖨 Print model</button>
           <select class="gl-imagery" aria-label="Imagery">
             <option value="colour">Colour + CTX 5 m detail</option>
             <option value="ctx">CTX 5 m (sharpest, greyscale)</option>
@@ -87,12 +87,15 @@ const Globe = (() => {
     root.querySelector("[data-act=here]").onclick = () => opened && opened.lat !== undefined && goTo(opened.lat, opened.lon, opened.alt);
     root.querySelector("[data-act=print]").onclick = () => {
       const c = centre() || opened;
-      if (c) Orbit.openPrint({ lat: c.lat, lon: c.lon, name: opened && opened.lat !== undefined && !opened.fromMap ? opened.name : "This view" });
+      if (!c) return;
+      const seenKm = ((viewer.camera.positionCartographic.height - DATUM) / 1000) * 1.2; // about what's on screen
+      PrintModel.open({ lat: c.lat, lon: c.lon, spanKm: Math.max(5, Math.min(1000, seenKm)),
+        name: opened && opened.lat !== undefined && !opened.fromMap ? opened.name : "This view" });
     };
     root.querySelector(".gl-imagery").onchange = (e) => setImagery(e.target.value);
     root.querySelectorAll("[data-exag]").forEach((b) => (b.onclick = () => setExag(+b.dataset.exag)));
     root.querySelectorAll("[data-nav]").forEach((b) => (b.onclick = () => nav(b.dataset.nav)));
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && root && !root.hidden && !document.querySelector("#gv, .os-back")) close(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && root && !root.hidden && !document.querySelector("#gv, .pm-back")) close(); });
   }
   function status(text) {
     const el = root.querySelector(".gl-status");

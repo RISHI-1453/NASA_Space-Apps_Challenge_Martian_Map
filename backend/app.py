@@ -110,6 +110,21 @@ def terrain_tile(z: int, x: int, y: int):
                              "Cache-Control": "public, max-age=120" if stand_in else LONG_CACHE})
 
 
+@app.get("/api/terrain/area")
+def terrain_area(s: float, w: float, n: float, e: float, nx: int = 160, ny: int = 160):
+    """Elevation grid for a 3D-printed relief model: float32 metres, row 0 = north."""
+    nx, ny = max(8, min(nx, 400)), max(8, min(ny, 400))
+    if not (-90 <= s < n <= 90 and -180 <= w < e <= 180):
+        raise HTTPException(400, "bad area")
+    try:
+        h, src = terrain.area_grid(s, w, n, e, nx, ny)
+    except FileNotFoundError as err:
+        raise HTTPException(503, str(err))
+    return Response(h.tobytes(), media_type="application/octet-stream",
+                    headers={"X-Source": src, "X-Nx": str(nx), "X-Ny": str(ny),
+                             "Access-Control-Expose-Headers": "X-Source, X-Nx, X-Ny"})
+
+
 @app.get("/api/features")
 def all_features():
     """Every IAU-named feature, compact: [name, kind, lat, lon, diameter_km, MOLA elevation m] — globe labels."""
