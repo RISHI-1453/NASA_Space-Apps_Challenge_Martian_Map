@@ -74,7 +74,7 @@ const Nav = (() => {
         <b>Report your position</b>
         <button id="nav-tap" type="button">📍 Tap my position on the map</button>
         <form id="nav-coord" class="nav-ctrl-row"><input id="nav-coord-in" placeholder="or type lat, lon" aria-label="Nav fix coordinates" autocomplete="off"><button type="submit">Go</button></form>
-        <span class="muted small" id="nav-lastfix">Starting at A. Report your position as you walk.</span>
+        <span class="muted small" id="nav-lastfix">You start at A. Whenever your suit or rover gives a position fix, tap it on the map or type it here; the guidance updates from each fix.</span>
       </div>`);
     L.DomEvent.disableClickPropagation(ui.ctrl);
     L.DomEvent.disableClickPropagation(ui.bottom);

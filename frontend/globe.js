@@ -188,6 +188,7 @@ const Globe = (() => {
     const h = viewer.cesiumWidget.screenSpaceEventHandler;
     h.removeInputAction(C.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
     h.setInputAction((e) => {                              // double-click: zoom in towards that spot
+      if (mode === "chase") return resetChaseLook();       // …or, following a walk, look ahead again
       const p = viewer.scene.globe.pick(viewer.camera.getPickRay(e.position), viewer.scene);
       if (!p) return;
       const range = C.Cartesian3.distance(viewer.camera.positionWC, p);
@@ -196,6 +197,35 @@ const Globe = (() => {
     const stopOrbit = () => { if (orbiting) toggleOrbit(false); };
     viewer.scene.canvas.addEventListener("pointerdown", stopOrbit);
     viewer.scene.canvas.addEventListener("wheel", stopOrbit, { passive: true });
+    chaseLook(viewer.scene.canvas);
+  }
+  // While following a walk the camera is ours, so the mouse steers it around the walker instead:
+  // drag (any button, with or without Ctrl) to look around, scroll to go closer or farther.
+  function chaseLook(cv) {
+    let drag = null;
+    cv.addEventListener("pointerdown", (e) => {
+      if (mode !== "chase" || !walkState) return;
+      drag = { x: e.clientX, y: e.clientY, yaw: walkState.yaw, tilt: walkState.tilt };
+      cv.setPointerCapture(e.pointerId);
+    });
+    cv.addEventListener("pointermove", (e) => {
+      if (!drag || !walkState) return;
+      walkState.yaw = drag.yaw + (e.clientX - drag.x) * 0.006;
+      walkState.tilt = Math.max(-0.45, Math.min(0.9, drag.tilt + (e.clientY - drag.y) * 0.004));
+    });
+    const end = () => { drag = null; };
+    cv.addEventListener("pointerup", end);
+    cv.addEventListener("pointercancel", end);
+    cv.addEventListener("wheel", (e) => {
+      if (mode !== "chase" || !walkState) return;
+      e.preventDefault();
+      walkState.zoom = Math.max(0.6, Math.min(3, walkState.zoom * (e.deltaY > 0 ? 1.12 : 0.89)));
+    }, { passive: false });
+    cv.addEventListener("contextmenu", (e) => e.preventDefault()); // right-drag turns the view, not a menu
+  }
+  function resetChaseLook() {
+    if (!walkState) return;
+    walkState.yaw = 0; walkState.tilt = 0; walkState.zoom = 1;
   }
   function onCamera() {
     const c = viewer.camera.positionCartographic, lat = c.latitude / D2R, lon = c.longitude / D2R;
@@ -442,10 +472,15 @@ const Globe = (() => {
     };
     viewer.scene.preRender.addEventListener(orbiting);
   }
+  const HINT = {
+    free: "Drag to move · right-drag or Ctrl-drag to tilt & turn · scroll to zoom · double-click to zoom in",
+    chase: "Following the walk: drag to look around · scroll to move closer or farther · double-click to look ahead again",
+  };
   function setMode(m) {
     mode = m;
     viewer.scene.screenSpaceCameraController.enableInputs = m === "free";
     root.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === m)));
+    root.querySelector(".gl-hint").textContent = HINT[m] || HINT.free;
   }
 
   // ---------- fly along the planned walk ----------
@@ -459,7 +494,7 @@ const Globe = (() => {
         <select class="gv-speed" aria-label="Playback speed"><option value="15">Walk ×10</option><option value="40">×25</option><option value="120">×75</option></select>
       </div>
       <div class="gv-row">
-        <button type="button" data-mode="chase">Follow the walk</button><button type="button" data-mode="free">Look around</button>
+        <button type="button" data-mode="chase" title="The camera follows the walk; drag to look around it">Follow the walk</button><button type="button" data-mode="free" title="Fly the camera anywhere (the walk pauses)">Free camera</button>
         <span class="gv-info"></span>
       </div>`;
     const hud = root.querySelector(".gl-hud");
@@ -500,10 +535,14 @@ const Globe = (() => {
     const brg = st.along >= st.total - 1 ? st.lastBrg : bearing(p, ahead);
     st.lastBrg = brg;
     if (mode === "chase") {
-      const back = offset(p, brg, -st.back);
+      // orbit the walker: yaw swings the camera round them, tilt raises or lowers it, zoom moves it in/out
+      const r = Math.hypot(st.back, st.up) * st.zoom;
+      const elev = Math.max(8 * D2R, Math.min(80 * D2R, Math.atan2(st.up, st.back) + st.tilt));
+      const d = r * Math.cos(elev), h = r * Math.sin(elev), look = brg + st.yaw;
+      const back = offset(p, look, -d);
       const gz = Math.max(ground(p.lat, p.lon, p.elev), ground(back.lat, back.lon, p.elev)); // clear any hill behind you too
-      viewer.camera.setView({ destination: C.Cartesian3.fromDegrees(back.lon, back.lat, gz + st.up),
-        orientation: { heading: brg, pitch: -Math.atan2(st.up, st.back * 1.6), roll: 0 } });
+      viewer.camera.setView({ destination: C.Cartesian3.fromDegrees(back.lon, back.lat, gz + h),
+        orientation: { heading: look, pitch: -Math.atan2(h, d * 1.6), roll: 0 } });
     }
     const s0 = st.S[p.i], leg = lastProfile.legs[s0.leg];
     const info = root.querySelector(".gl-hud .gv-info"), sc = root.querySelector(".gl-hud .gv-scrub");
@@ -561,7 +600,7 @@ const Globe = (() => {
     for (let i = 1; i < S.length; i++) cum.push(cum[i - 1] + (S[i].dist_m - S[i - 1].dist_m));
     const sharp = inJezero(S[0].lat, S[0].lon);       // 20 m terrain: fly low; elsewhere stay above ~1 km
     walkState = { S, cum, total: cum[cum.length - 1], along: 0, playing: false, speed: 40, last: performance.now(), lastBrg: 0,
-      back: sharp ? 450 : 1800, up: sharp ? 260 : 1100 };
+      back: sharp ? 450 : 1800, up: sharp ? 260 : 1100, yaw: 0, tilt: 0, zoom: 1 };
     mode = "free";
     walkHud();
     veil("Loading the terrain along your route…", true);
