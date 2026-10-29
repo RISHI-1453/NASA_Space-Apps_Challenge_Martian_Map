@@ -4,7 +4,8 @@
 // fix (radio ranging to the lander, visual odometry, IMU). The astronaut reports each fix by
 // tapping the map, typing coordinates, or "Your position" → I'm here. Each fix is snapped to the
 // planned route to get progress, cross-track error, next turn, time/O₂ remaining, hazards ahead,
-// and a turn-back alert.
+// and a turn-back alert. The same guidance can be shown as a helmet-visor HUD: a compass tape with
+// the bearing to the next station, suit gauges, the mission clock, dose so far and space weather.
 const Nav = (() => {
   const OFF_ROUTE_M = 40;   // cross-track distance that counts as off route
   const ARRIVE_M = 30;      // within this of a stop = arrived
@@ -13,7 +14,7 @@ const Nav = (() => {
 
   let active = false, P = null, labels = [], pts = [], cum = [], lat0 = 0, lon0 = 0;
   let stops = [], arrived = new Set(), progress = 0, lastAlong = 0, wrongWayCount = 0;
-  let startWall = 0, follow = true, fixCount = 0;
+  let startWall = 0, follow = true, fixCount = 0, visor = false, prevFix = null, heading = null;
   const layer = L.layerGroup();
   let doneLine, trail, posMarker, rejoinLine, accCircle;
   const ui = {};
@@ -105,6 +106,9 @@ const Nav = (() => {
     accCircle.setLatLng([lat, lon]).setRadius(acc * MARS_TO_LEAFLET_M);
     if (acc > 8 && !layer.hasLayer(accCircle)) accCircle.addTo(layer);
     if (acc <= 8) accCircle.remove();
+    // which way the astronaut is actually walking (from the last two fixes)
+    if (prevFix && how !== "refresh" && Math.hypot(...toXY(lat, lon).map((v, i) => v - toXY(...prevFix)[i])) > 5) heading = bearingTo(prevFix, [lat, lon]);
+    if (how !== "refresh") prevFix = [lat, lon];
     const lf = document.getElementById("nav-lastfix");
     const HOW = { tap: "map tap", typed: "typed", start: "route start" };
     if (lf && how !== "refresh") lf.textContent = `Last fix (${HOW[how] || "position"}): ${fmtLatLon(lat, lon)} ±${Math.round(acc)} m`;
@@ -138,7 +142,7 @@ const Nav = (() => {
     const left = {}, needRest = {}, reserve = {};
     for (const r of Suit.RES) {
       left[r.key] = base.have[r.key] - (now[r.key] - base.at[r.key]) - rest[r.key] * idle;
-      needRest[r.key] = TL[r.key][TL.t.length - 1] - now[r.key];
+      needRest[r.key] = TL[r.key][TL.t.length - 1] - now[r.key] + (TL.endUse?.[r.key] || 0);
       reserve[r.key] = (Suit.FULL[r.key] * Suit.state.reservePct) / 100;
     }
     const ltst = departLtst() + el / MARS_HOUR;
@@ -186,8 +190,12 @@ const Nav = (() => {
     if (day && ltst + tRem / MARS_HOUR > day.set) alerts.push(["warn", `☾ At this pace you finish after sunset (${MarsTime.hhmm(day.set)})`]);
     const late = el - tPlan;
     if (late > 0.25) alerts.push(["warn", `Behind plan by ${fmtDur(late)}`]);
+    const wx = typeof SpaceWx !== "undefined" ? SpaceWx.assess() : null;
+    if (wx && wx.level === "nogo") alerts.unshift(["bad", `☀ SOLAR STORM — head for shelter at ${labels[0]} now (${wx.headline})`]);
+    else if (wx && wx.level === "caution") alerts.push(["warn", `☀ Space weather: ${wx.headline}`]);
     ui.alert.hidden = !alerts.length;
     if (alerts.length) { ui.alert.className = `nav-alert ${alerts[0][0]}`; ui.alert.textContent = alerts[0][1]; }
+    if (visor) renderVisor(st, { icon, big, line, offRoute, alerts, wx });
 
     // --- bottom bar ---
     const eta = ltst + tRem / MARS_HOUR;
@@ -200,8 +208,9 @@ const Nav = (() => {
         <div class="${needRest.battery > left.battery - reserve.battery ? "neg" : ""}"><b>${Math.max(0, Math.round((left.battery / Suit.FULL.battery) * 100))}%</b><span>battery</span></div>
         <div><b>${fmtDur(el)}</b><span>EVA time</span></div>
       </div>
-      <div class="nav-btns">${follow ? "" : '<button id="nav-recenter">◎ Re-center</button>'}<button id="nav-readings">Update readings</button><button id="nav-view">👁 View</button><button id="nav-end">End</button></div>`;
+      <div class="nav-btns">${follow ? "" : '<button id="nav-recenter">◎ Re-center</button>'}<button id="nav-readings">Update readings</button><button id="nav-visor">🪖 Visor</button><button id="nav-view">👁 View</button><button id="nav-end">End</button></div>`;
     ui.bottom.querySelector("#nav-end").onclick = stop;
+    ui.bottom.querySelector("#nav-visor").onclick = () => setVisor(true);
     ui.bottom.querySelector("#nav-readings").onclick = () => openReadings(left);
     ui.bottom.querySelector("#nav-view").onclick = () => typeof GroundView !== "undefined" && GroundView.at(lat, lon, "Your position");
     const rc = ui.bottom.querySelector("#nav-recenter");
@@ -237,7 +246,7 @@ const Nav = (() => {
   // new readings or a change in pace: rebuild the timeline and carry on from here
   Suit.onChange(() => {
     if (!active) return;
-    TL = Suit.timeline(P);
+    TL = Suit.timeline(P, routeOpts(P));
     rebase();
     if (lastState) fix(lastState.lat, lastState.lon, lastState.acc, "refresh");
   });
@@ -251,8 +260,9 @@ const Nav = (() => {
   }
 
   // ---- start / stop ----
-  function start() {
-    if (!lastProfile || active) return;
+  function start(opts = {}) {
+    if (active) { if (opts.visor) setVisor(true); return; }
+    if (!lastProfile) return;
     P = lastProfile; labels = lastLabels;
     lat0 = P.samples[0].lat; lon0 = P.samples[0].lon;
     pts = P.samples.map((s) => toXY(s.lat, s.lon));
@@ -260,9 +270,9 @@ const Nav = (() => {
     for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
     stops = [{ idx: 0, dist: 0 }, ...P.legs.map((l) => ({ idx: l.to_idx, dist: cum[l.to_idx] }))];
     arrived = new Set(); progress = 0; lastAlong = 0; wrongWayCount = 0;
-    follow = true; fixCount = 0;
+    follow = true; fixCount = 0; prevFix = null; heading = null;
     startWall = Date.now();
-    TL = Suit.timeline(P);
+    TL = Suit.timeline(P, routeOpts(P));
     rebase();
     if (drawing) setDrawing(false);
     active = true;
@@ -278,14 +288,77 @@ const Nav = (() => {
     // the walk starts at A; it only moves when the astronaut reports a position
     const atStart = me && Math.hypot(...toXY(me[0], me[1])) < 100;
     fix(...(atStart ? me : [lat0, lon0]), atStart ? 15 : 3, atStart ? "position" : "start");
+    if (opts.visor) setVisor(true);
   }
   function stop() {
     armTap(false);
+    setVisor(false);
     active = false;
     document.body.classList.remove("navigating");
     map.off("dragstart", stopFollow);
     layer.remove();
     for (const k of Object.keys(ui)) { ui[k].remove(); delete ui[k]; }
+  }
+
+  // ---- helmet-visor HUD ----
+  function setVisor(on) {
+    visor = on && active;
+    document.body.classList.toggle("visor-on", visor);
+    if (!visor) { ui.visor?.remove(); delete ui.visor; return; }
+    if (!ui.visor) {
+      const d = document.createElement("div");
+      d.className = "visor";
+      d.innerHTML = `<div class="v-glass"></div><div class="v-tape"><div class="v-ticks"></div><div class="v-caret">▼</div></div>
+        <div class="v-left"></div><div class="v-right"></div><div class="v-center"></div><div class="v-alert" hidden></div>
+        <div class="v-reticle"></div><button type="button" class="v-exit">✕ Exit visor</button>`;
+      L.DomEvent.disableClickPropagation(d);
+      d.querySelector(".v-exit").onclick = () => setVisor(false);
+      map.getContainer().appendChild(d);
+      ui.visor = d;
+    }
+    render(lastState);
+  }
+  const angDiff = (a, b) => ((a - b + 540) % 360) - 180;
+  function renderVisor(st, card) {
+    const d = ui.visor;
+    if (!d) return;
+    const { lat, lon, next, total, el, tRem, left, needRest, reserve, ltst, day, snapLL } = st;
+    // compass tape: centred on the way you're walking, ◆ on the way to go
+    const target = card.offRoute ? bearingTo([lat, lon], snapLL) : next > 0 ? bearingTo([lat, lon], [P.samples[stops[next].idx].lat, P.samples[stops[next].idx].lon]) : null;
+    const hdg = heading ?? (next > 0 ? P.legs[next - 1].bearing_deg : target ?? 0);
+    const SPAN = 120, ticks = [];
+    for (let a = Math.ceil((hdg - SPAN / 2) / 10) * 10; a <= hdg + SPAN / 2; a += 10) {
+      const x = 50 + (angDiff(a, hdg) / SPAN) * 100, n = ((a % 360) + 360) % 360;
+      const lab = n % 90 === 0 ? "NESW"[n / 90] : n % 30 === 0 ? String(n) : "";
+      ticks.push(`<span class="v-tick${lab ? " big" : ""}" style="left:${x}%">${lab}</span>`);
+    }
+    if (target !== null) {
+      const off = angDiff(target, hdg), x = 50 + (Math.max(-SPAN / 2, Math.min(SPAN / 2, off)) / SPAN) * 100;
+      ticks.push(`<span class="v-target${Math.abs(off) > SPAN / 2 ? " edge" : ""}" style="left:${x}%">◆</span>`);
+    }
+    d.querySelector(".v-ticks").innerHTML = ticks.join("") + `<span class="v-hdg">${String(Math.round(((hdg % 360) + 360) % 360)).padStart(3, "0")}°${target !== null ? ` · go ${String(Math.round(target)).padStart(3, "0")}°` : ""}</span>`;
+    // suit gauges: the lower suit of the pair, and what the rest of the walk needs (tick)
+    const gauge = (key, name) => {
+      const f = Math.max(0, left[key] / Suit.FULL[key]), need = Math.min(1, (needRest[key] + reserve[key]) / Suit.FULL[key]);
+      const bad = needRest[key] > left[key] - reserve[key];
+      return `<div class="v-gauge${bad ? " bad" : f < 0.3 ? " low" : ""}"><div class="v-bar"><i style="height:${Math.round(f * 100)}%"></i><b style="bottom:${Math.round(need * 100)}%"></b></div><span>${name}</span><em>${key === "co2" ? `${Math.max(0, left[key]).toFixed(1)}h` : `${Math.round(f * 100)}%`}</em></div>`;
+    };
+    d.querySelector(".v-left").innerHTML = gauge("o2", "O₂") + gauge("battery", "PWR") + gauge("water", "H₂O") + gauge("co2", "CO₂");
+    const dose = (el / 24) * 0.64, e = MarsTime.earth(), sun = sunElevation(lat, ltst); // on the EVA's clock, like the ETA
+    const WX = { go: "GO", caution: "CAUTION", nogo: "NO-GO", unknown: "—" };
+    d.querySelector(".v-right").innerHTML = `
+      <div><span>EVA</span><b>${fmtDur(el)}</b></div>
+      <div><span>ETA</span><b>${clock(ltst + tRem / MARS_HOUR)}</b></div>
+      <div><span>TO GO</span><b>${fmtKm(Math.max(0, total - progress) / 1000)}</b></div>
+      <div><span>SUN</span><b>${sun.toFixed(0)}°${day ? ` · set ${MarsTime.hhmm(day.set)}` : ""}</b></div>
+      <div><span>DOSE</span><b>${dose.toFixed(dose < 0.1 ? 3 : 2)} mSv</b></div>
+      <div class="wx-${card.wx?.level || "unknown"}"><span>SPACE WX</span><b>${WX[card.wx?.level || "unknown"]}</b></div>
+      <div><span>EARTH</span><b>${e.lightMin.toFixed(0)} min</b></div>`;
+    const task = next > 0 && stops[next].idx === P.legs[next - 1].to_idx && next < waypoints.length ? Missions.taskAt(...waypoints[next]) : null;
+    d.querySelector(".v-center").innerHTML = `<div class="v-big"><span>${card.icon}</span> ${card.big}</div><div class="v-line">${card.line}</div>${task ? `<div class="v-task">▸ ${task.title}: ${task.task}</div>` : ""}`;
+    const va = d.querySelector(".v-alert");
+    va.hidden = !card.alerts.length;
+    if (card.alerts.length) { va.className = `v-alert ${card.alerts[0][0]}`; va.textContent = card.alerts[0][1]; }
   }
 
   // manual fixes: tap the map
@@ -306,5 +379,5 @@ const Nav = (() => {
   });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && tapArmed) armTap(false); });
 
-  return { start, stop, fix, get active() { return active; } };
+  return { start, stop, fix, setVisor, get active() { return active; } };
 })();

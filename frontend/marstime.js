@@ -67,7 +67,10 @@ const MarsTime = (() => {
     const d = [m[0] - e[0], m[1] - e[1], m[2] - e[2]];
     const au = Math.hypot(...d), r = Math.hypot(...e);
     const elong = deg(Math.acos(-(d[0] * e[0] + d[1] * e[1] + d[2] * e[2]) / (au * r))); // angle Sun–Earth–Mars
-    return { au, lightMin: (au * 499.004784) / 60, elongDeg: elong };
+    // how far Mars is ahead of Earth around the Sun (+ = ahead): Mars' solar longitude as seen from
+    // Earth, which is the Sun's "west" in the heliographic coordinates flare positions are given in
+    const sep = mod(deg(Math.atan2(m[1], m[0]) - Math.atan2(e[1], e[0])) + 180, 360) - 180;
+    return { au, lightMin: (au * 499.004784) / 60, elongDeg: elong, sepDeg: sep, marsAU: Math.hypot(...m) };
   }
 
   function season(Ls, lat) {

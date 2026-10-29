@@ -32,12 +32,21 @@
 
     <aside id="panel">
       <nav class="panel-tabs" role="tablist" aria-label="Panel sections">
+        <button type="button" role="tab" data-tab="missions">Missions</button>
         <button type="button" role="tab" data-tab="route">Route</button>
-        <button type="button" role="tab" data-tab="me">Me &amp; suit<span class="tab-dot" id="tab-me-dot" hidden></span></button>
+        <button type="button" role="tab" data-tab="me">Crew<span class="tab-dot" id="tab-me-dot" hidden></span></button>
         <button type="button" role="tab" data-tab="sites">Sites</button>
         <button type="button" role="tab" data-tab="conditions">Conditions</button>
         <button type="button" role="tab" data-tab="science">Science</button>
       </nav>
+      <section data-tab="missions">
+        <h2>Science EVAs</h2>
+        <p class="muted small mi-intro">Ready-made Marswalks at places NASA's rovers and orbiters have studied closely. Each has a science
+          goal, stations with tasks and the kit to carry, and the data layers that matter. <b>▶ Plan this EVA</b> loads it into the
+          planner, where every check (suits, slopes, sunlight, radiation, space weather) runs on it.</p>
+        <div id="missions"></div>
+      </section>
+
       <section data-tab="me">
         <h2>Your position</h2>
         <div class="search">
@@ -55,7 +64,7 @@
       </section>
 
       <section data-tab="me">
-        <h2>Astronaut &amp; suit</h2>
+        <h2>Crew &amp; suits</h2>
         <div id="suit-summary" class="suit-summary"></div>
         <details id="suit-edit" class="suit-edit">
           <summary>Update readings</summary>
@@ -75,10 +84,24 @@
               <label>Heart rate <span><input name="heartRate" type="number" min="30" max="220" step="1" placeholder="—"> bpm</span></label>
               <label>Keep in reserve <span><input name="reservePct" type="number" min="0" max="50" step="1"> %</span></label>
             </fieldset>
+            <fieldset>
+              <legend>EVA team</legend>
+              <label>Crew on this walk <span><select name="crew"><option value="2">Two (buddy pair)</option><option value="1">One (solo)</option></select></span></label>
+              <label>Rover support <span><select name="rover"><option value="none">None: walk only</option><option value="lrv">Open rover (Apollo LRV style)</option><option value="pressurized">Pressurised rover</option></select></span></label>
+            </fieldset>
+            <fieldset id="ev2-set">
+              <legend>EV2 (your partner's suit)</legend>
+              <label>Oxygen <span><input name="o2Pct2" type="number" min="0" max="100" step="1"> %</span></label>
+              <label>Battery <span><input name="batteryPct2" type="number" min="0" max="100" step="1"> %</span></label>
+              <label>Cooling water <span><input name="waterPct2" type="number" min="0" max="100" step="1"> %</span></label>
+              <label>CO₂ scrubber <span><input name="co2Hours2" type="number" min="0" max="12" step="0.1"> h left</span></label>
+            </fieldset>
             <button type="button" id="suit-reset">Fresh suit (refill to 100%)</button>
             <p class="muted small">Effort per step comes from walking speed, slope, body mass and load (the Pandolf
               equation), × 0.68 for Mars gravity — the drop measured walking at 0.38 g — and × 1.3 for suit joints.
-              It's then turned into oxygen, CO₂-scrubber, cooling-water and battery use. Sources are in the
+              It's then turned into oxygen, CO₂-scrubber, cooling-water and battery use. Work at a stop counts at 250 W (Apollo-like
+              station effort); riding a rover at 150 W. A buddy pair walks home together, so every check uses whichever suit has
+              less of each supply. With a rover, any leg of a route can be driven instead of walked. Sources are in the
               <b>Science</b> tab.</p>
           </form>
         </details>
@@ -125,6 +148,7 @@
         <div class="row options">
           <label>Depart <input id="depart" type="time" value="09:00"> <span class="muted">local solar time</span></label>
           <label><input id="roundtrip" type="checkbox" checked> Return to start</label>
+          <label title="Route each leg around ground steeper than 15° (crater walls, scarps, big rock formations) when the terrain data shows a gentler line"><input id="avoid" type="checkbox" checked> Walk around steep ground</label>
         </div>
 
         <ol id="howto" class="howto">
@@ -147,6 +171,10 @@
       <section data-tab="conditions">
         <h2>Conditions at destination</h2>
         <div id="conditions" class="stats"></div>
+        <h3 class="sci-sub">Space weather</h3>
+        <div id="spacewx" class="sci"><div class="muted small">Checking the Sun…</div></div>
+        <h3 class="sci-sub">What orbiters found here</h3>
+        <div id="whats-here" class="sci"></div>
         <h3 class="sci-sub">Hazards &amp; resources here</h3>
         <div id="hazards" class="sci"></div>
         <p class="muted small">Sun, local time and Earth's distance are computed (Mars24 algorithm, JPL orbital
@@ -167,8 +195,12 @@
   <script defer src="marstime.js"></script>
   <script defer src="suit.js"></script>
   <script defer src="science.js"></script>
+  <script defer src="spaceweather.js"></script>
   <script defer src="app.js"></script>
   <script defer src="directions.js"></script>
+  <script defer src="datalayers.js"></script>
+  <script defer src="missions.js"></script>
+  <script defer src="checklist.js"></script>
   <script defer src="groundview.js"></script>
   <script defer src="globe.js"></script>
   <script defer src="printmodel.js"></script>

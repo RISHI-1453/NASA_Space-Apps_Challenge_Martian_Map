@@ -1,6 +1,6 @@
 // Mars in 3D — the whole planet as a streaming globe, like Google Earth (CesiumJS).
 //  • Terrain: the local MOLA grid for the planet view (instant), the HRSC/MOLA 200 m blend as you
-//    zoom in, and the 20 m CTX DTM in Jezero — /api/terrain/tile serves 65×65 heightmaps.
+//    zoom in, and the 20 m DTMs in Jezero (CTX) and Gale (HiRISE) — /api/terrain/tile serves 65×65 heightmaps.
 //  • Imagery: the Viking colour mosaic, sharpened close up by the global 5 m CTX mosaic and, in
 //    Jezero, HiRISE 25 cm — the heavy layers come through /api/imagery as small WebP tiles.
 //  • On top: your route (coloured by slope) and stops, landing sites, IAU place names, the
@@ -17,12 +17,14 @@ const Globe = (() => {
   const DATUM = 10000;
   const lift = (h) => DATUM + h * exag;
   const D2R = Math.PI / 180;
-  const MIN_M = { jezero: 200, mars: 1500 };   // closest approach, by what the elevation data resolves
+  const MIN_M = { jezero: 200, mars: 1500 };   // closest approach, by what the elevation data resolves (Gale has 20 m too)
   let C = null, viewer = null, root = null, enginePromise = null, providers = null;
   let opened = null, exag = 1, mode = "free", walkState = null, raf = 0, orbiting = null, veilTimer = 0;
   let features = null, featureLabels = null, routeFor = null, meFor = null, herePin = null;
   const routeEnts = [], routeLines = [], meEnts = [];
-  const inJezero = (lat, lon) => lat >= JEZ_CTX[0][0] && lat <= JEZ_CTX[1][0] && lon >= JEZ_CTX[0][1] && lon <= JEZ_CTX[1][1];
+  const inBox = (b, lat, lon) => lat >= b[0][0] && lat <= b[1][0] && lon >= b[0][1] && lon <= b[1][1];
+  // inside a 20 m terrain model (Jezero's CTX DTM or Gale's HiRISE DTM): the camera may come closer
+  const inJezero = (lat, lon) => inBox(JEZ_CTX, lat, lon) || inBox(GALE_HIRISE, lat, lon);
 
   // ---------- engine (loaded on first use only) ----------
   function engine() {
@@ -248,6 +250,7 @@ const Globe = (() => {
       ctx: ours("ctx", 12, { tileWidth: 512, tileHeight: 512 }),
       jezCtx: ours("jez_ctx", 13, { rectangle: box(JEZ_CTX) }),
       jezHirise: ours("jez_hirise", 17, { rectangle: box(JEZ_HIRISE) }),
+      galeHirise: ours("gale_hirise", 16, { rectangle: box(GALE_HIRISE) }),
     };
   }
   function setImagery(m) {
@@ -262,6 +265,7 @@ const Globe = (() => {
       add(providers.ctx, m === "ctx" ? { minimumTerrainLevel: 6 } : { alpha: 0.72, minimumTerrainLevel: 8 });
       add(providers.jezCtx, { minimumTerrainLevel: 9 });
       add(providers.jezHirise, { minimumTerrainLevel: 11 });
+      add(providers.galeHirise, { minimumTerrainLevel: 11 });
     }
     root.querySelector(".gl-imagery").value = m;
   }

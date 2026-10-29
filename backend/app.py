@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -12,8 +13,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import imagery
+import pathfind
 import places
 import rover
+import sciencedata
+import spaceweather
 import terrain
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -150,14 +154,55 @@ def dem_coverage():
 class Route(BaseModel):
     waypoints: list[tuple[float, float]] = Field(..., min_length=2, max_length=200)
     step_m: float = Field(50, ge=20, le=5000)
+    avoid: bool = False  # walk around ground steeper than 15° where a reasonable detour exists
 
 
 @app.post("/api/profile")
 def profile(route: Route):
     try:
-        return terrain.profile(route.waypoints, route.step_m)
+        detours = None
+        if route.avoid:
+            legs = list(zip(route.waypoints, route.waypoints[1:]))
+            with ThreadPoolExecutor(4) as ex:
+                detours = list(ex.map(lambda ab: pathfind.safe_leg(*ab), legs))
+        return terrain.profile(route.waypoints, route.step_m, detours)
     except FileNotFoundError as e:
         raise HTTPException(503, str(e))
+
+
+# --- science layers: minerals, salts, ice, active slopes, geology -------------------------------
+@app.get("/api/science/features")
+def science_features():
+    """Every mapped detection, compact, for the map layers (changes only when the data is rebuilt)."""
+    return Response(json.dumps(sciencedata.features(), separators=(",", ":")), media_type="application/json",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/science/near")
+def science_near(lat: float, lon: float, km: float = 25):
+    """What orbiters found near a point, plus the geologic unit under it."""
+    try:
+        geo = sciencedata.geology(lat, lon)
+    except Exception:
+        geo = None  # the geologic map is a live Mars Trek query; the rest is local
+    return {"features": sciencedata.near(lat, lon, min(km, 200)), "geology": geo}
+
+
+class Points(BaseModel):
+    points: list[tuple[float, float]] = Field(..., min_length=1, max_length=5000)
+    km: float = Field(3, gt=0, le=50)
+
+
+@app.post("/api/science/along")
+def science_along(body: Points):
+    """Science targets close to a route, and the geologic units it crosses, in walking order."""
+    return {"features": sciencedata.along(body.points, body.km), "geology": sciencedata.geology_along(body.points)}
+
+
+@app.get("/api/spaceweather")
+def space_weather():
+    """Solar flares, particle events and Mars-bound CMEs (NASA DONKI) with NOAA SWPC's GOES data."""
+    return spaceweather.status()
 
 
 class Frontend(StaticFiles):

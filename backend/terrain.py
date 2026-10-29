@@ -69,7 +69,8 @@ def mola_grid(lats: np.ndarray, lons: np.ndarray) -> np.ndarray:
 
 
 class LocalDEM:
-    """Equirectangular GeoTIFF DTM (Mars 2000 sphere, metres) - e.g. USGS Mars 2020 TRN products."""
+    """GeoTIFF DTM, either equirectangular in metres (e.g. USGS Mars 2020 TRN products) or plain
+    lat/lon degrees (e.g. an export from a Mars Trek image service)."""
 
     def __init__(self, name: str, path: Path, label: str):
         self.name, self.path, self.label = name, path, label
@@ -84,9 +85,15 @@ class LocalDEM:
             a = page.asarray().astype(np.float32)
             sx, sy, _ = page.tags["ModelPixelScaleTag"].value
             _, _, _, x0, y0, _ = page.tags["ModelTiepointTag"].value
-            radius = t.geotiff_metadata["GeogSemiMajorAxisGeoKey"]
+            geo = t.geotiff_metadata
+            radius = geo["GeogSemiMajorAxisGeoKey"]
+        if int(geo.get("GTModelTypeGeoKey", 1)) == 2:  # geographic: pixel sizes are degrees
+            res_m = sx * math.pi / 180 * radius
+            radius = 180 / math.pi                       # so that radians(lon) * radius = lon
+        else:
+            res_m = sx
         a[a < -1e20] = np.nan
-        self._a, self.res_m = a, sx
+        self._a, self.res_m = a, round(res_m, 1)
         self.x0, self.y0, self.sx, self.sy, self.radius = x0, y0, sx, sy, radius
         k = 180 / (math.pi * radius)
         h, w = a.shape
@@ -143,6 +150,7 @@ class LocalDEM:
 
 LOCAL_DEMS = [
     LocalDEM("jezero_ctx", DATA / "jezero_ctx_dtm_20m.tif", "CTX Jezero DTM (20 m)"),
+    LocalDEM("gale_hirise", DATA / "gale_hirise_dtm_20m.tif", "HiRISE Gale DTM (20 m)"),
 ]
 MOLA_LABEL = "MGS MOLA (3.7 km)"
 
@@ -346,8 +354,10 @@ def describe_terrain(ascent: float, descent: float, dist_m: float, max_slope: fl
     return f"{base} ({slope_class(max_slope)} slopes, max {max_slope:.0f}°)"
 
 
-def profile(waypoints: list[tuple[float, float]], step_m: float = 250) -> dict:
-    """Densified elevation profile + per-leg directions + traverse totals for (lat, lon) waypoints."""
+def profile(waypoints: list[tuple[float, float]], step_m: float = 250, detours: list[dict | None] | None = None) -> dict:
+    """Densified elevation profile + per-leg directions + traverse totals for (lat, lon) waypoints.
+    detours[i], if given, is a gentler line for leg i (pathfind.safe_leg) to follow instead of
+    the straight one."""
     samples: list[dict] = []
     legs: list[dict] = []
     hazards: list[dict] = []
@@ -362,8 +372,11 @@ def profile(waypoints: list[tuple[float, float]], step_m: float = 250) -> dict:
                         "elev_m": round(z, 1), "slope_deg": round(slope_deg, 2), "leg": leg, "src": src,
                         "t_h": round(t_h, 4)})  # cumulative walking hours to reach this point
 
+    # the line each leg follows: straight, or the detour's vertices
+    lines = [(detours[i]["path"] if detours and detours[i] else [tuple(a), tuple(b)])
+             for i, (a, b) in enumerate(zip(waypoints, waypoints[1:]))]
     # keep the sample count sane on very long routes
-    total = sum(haversine_m(a, b) for a, b in zip(waypoints, waypoints[1:]))
+    total = sum(haversine_m(p, q) for line in lines for p, q in zip(line, line[1:]))
     # walking-scale routes get the 200 m global DEM; for very long (rover-scale) routes the
     # tile downloads aren't worth it - MOLA (local file) is plenty at that scale
     use_net = total <= 120_000
@@ -377,9 +390,11 @@ def profile(waypoints: list[tuple[float, float]], step_m: float = 250) -> dict:
     add_sample(first, z0, 0.0, 0, src0)
 
     for li, (a, b) in enumerate(zip(waypoints, waypoints[1:])):
-        seg = haversine_m(a, b)
-        n = max(1, int(seg // step_m))
-        pts = [_interp(a, b, i / n) for i in range(1, n)] + [tuple(b)]
+        pts = []
+        for p, q in zip(lines[li], lines[li][1:]):
+            n = max(1, int(haversine_m(p, q) // step_m))
+            pts += [_interp(p, q, i / n) for i in range(1, n)] + [tuple(q)]
+        pts[-1] = tuple(b)
         leg_start_idx = len(samples) - 1
         leg_dist = leg_hours = asc = desc = leg_max = 0.0
         leg_hazards = 0
@@ -405,6 +420,10 @@ def profile(waypoints: list[tuple[float, float]], step_m: float = 250) -> dict:
         hours += leg_hours
 
         brg = bearing_deg(a, b)
+        det = detours[li] if detours else None
+        terrain_text = describe_terrain(asc, desc, leg_dist, leg_max)
+        if det:
+            terrain_text += f" · bends around {det['straight_steep_m']} m of >{HAZARD_SLOPE_DEG}° ground on the direct line"
         legs.append({
             "index": li,
             "from_idx": leg_start_idx, "to_idx": len(samples) - 1,
@@ -415,7 +434,8 @@ def profile(waypoints: list[tuple[float, float]], step_m: float = 250) -> dict:
             "start_elev_m": round(samples[leg_start_idx]["elev_m"]),
             "end_elev_m": round(samples[-1]["elev_m"]),
             "max_slope_deg": round(leg_max, 1), "slope_class": slope_class(leg_max),
-            "terrain": describe_terrain(asc, desc, leg_dist, leg_max),
+            "terrain": terrain_text,
+            "detour": None if not det else {k: det[k] for k in ("straight_km", "straight_steep_m", "steep_m")},
             "hazard_points": leg_hazards,
             "walk_hours": round(leg_hours, 3),
             "cum_hours": round(hours, 3), "cum_km": round(dist / 1000, 3),

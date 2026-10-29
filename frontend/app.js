@@ -32,9 +32,14 @@ baseLayers["Viking color mosaic · 232 m"].addTo(map);
 // High-resolution local mosaics, drawn on top only where they have coverage (Jezero crater)
 const JEZ_CTX = [[18.2110, 77.1605], [18.7212, 77.6992]];
 const JEZ_HIRISE = [[18.3068, 77.2229], [18.6693, 77.5840]];
+// and in Gale crater, along Curiosity's whole traverse up Mount Sharp
+const GALE_CTX = [[-6.5733, 135.1843], [-2.8078, 139.2413]];
+const GALE_HIRISE = [[-4.9255, 137.1225], [-4.2490, 137.7298]];
 const hiresLayers = {
   "CTX Jezero mosaic · 6 m": trek("JEZ_ctx_B_soc_008_orthoMosaic_6m_Eqc_latTs0_lon0", "png", 13, { bounds: JEZ_CTX, minZoom: 8 }).addTo(map),
   "HiRISE Jezero mosaic · 25 cm": trek("JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd", "png", 17, { bounds: JEZ_HIRISE, minZoom: 10 }).addTo(map),
+  "CTX Gale mosaic · 6 m": trek("Gale_CTX_BlockAdj_dd", "png", 12, { bounds: GALE_CTX, minZoom: 8 }).addTo(map),
+  "HiRISE Gale mosaic · 25 cm": trek("curiosity_hirise_mosaic", "png", 16, { bounds: GALE_HIRISE, minZoom: 10 }).addTo(map),
 };
 
 const graticule = L.layerGroup();
@@ -127,6 +132,22 @@ const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const MARS_HOUR = 1.0274912517; // Earth hours in one Mars "hour" (1/24 sol); walk times are Earth hours
 const ROUTE = "#4f8cff", AMBER = "#f9ab00", RED = "#ea4335";
 let drawing = false, waypoints = [], wpNames = [], lastProfile = null, lastLabels = [], lastNames = [], chart = null, analyseToken = 0;
+const llKey = (p) => `${p[0].toFixed(5)},${p[1].toFixed(5)}`;
+const stopWork = new Map();   // llKey(stop) -> minutes of work planned there
+const driveLegs = new Set();  // "llKey(a)|llKey(b)" for legs driven on the rover instead of walked
+const legKey = (a, b) => `${llKey(a)}|${llKey(b)}`;
+const isDriven = (a, b) => Suit.state.rover !== "none" && (driveLegs.has(legKey(a, b)) || driveLegs.has(legKey(b, a)));
+// the suit timeline's options for a profile: station work at the outbound stops, driven legs
+function routeOpts(p = lastProfile, n = waypoints.length) {
+  if (!p) return {};
+  const dwell = {};
+  for (let j = 0; j < n; j++) { // the last stop of a one-way walk counts too: the work there ends the EVA
+    const m = +stopWork.get(llKey(waypoints[j])) || 0;
+    if (m > 0 && (j === 0 || p.legs[j - 1])) dwell[j === 0 ? 0 : p.legs[j - 1].to_idx] = m / 60;
+  }
+  const ends = p.legs.map((l) => [p.samples[l.from_idx], p.samples[l.to_idx]].map((s) => [s.lat, s.lon]));
+  return { dwell, drive: (leg) => !!ends[leg] && isDriven(...ends[leg]) };
+}
 const highlightLayer = L.layerGroup().addTo(map);
 const walkbackLayer = L.layerGroup().addTo(map); // 10 km walk-home ring + point of no return
 // Leaflet's EPSG4326 measures circles on an Earth-sized sphere; convert Mars metres to its metres
@@ -191,6 +212,7 @@ $("undo").onclick = () => { waypoints.pop(); wpNames.length = waypoints.length; 
 $("clear").onclick = () => { waypoints = []; wpNames = []; setDrawing(false); redrawRoute(); if (typeof Dir !== "undefined") Dir.clear(); };
 $("export").onclick = exportGeoJSON;
 $("roundtrip").onchange = () => redrawRoute();
+$("avoid").onchange = () => redrawRoute();
 $("depart").oninput = () => lastProfile && renderPanel(lastProfile, lastLabels);
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
@@ -252,7 +274,7 @@ async function analyse() {
   try {
     const r = await fetch("/api/profile", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ waypoints: pts, step_m: 50 }),
+      body: JSON.stringify({ waypoints: pts, step_m: 50, avoid: $("avoid").checked }),
     });
     if (token !== analyseToken) return; // a newer edit superseded this request
     if (!r.ok) throw new Error(r.status === 503 ? "elevation data missing on the server (run scripts/fetch_data.py)" : `server error ${r.status}`);
@@ -283,8 +305,10 @@ function drawRoute(p, outboundLegs) {
   const ll = S.map((s) => [s.lat, s.lon]);
   L.polyline(ll, { color: "#0b1a33", weight: 11, opacity: 0.9, lineCap: "round", lineJoin: "round", interactive: false }).addTo(routeLayer);
   L.polyline(ll, { color: ROUTE, weight: 6, lineCap: "round", lineJoin: "round", interactive: false }).addTo(routeLayer);
+  const drives = routeOpts(p).drive || (() => false);
   for (let i = 1; i < S.length; i++) {
     const sl = S[i].slope_deg;
+    if (drives(S[i].leg)) { L.polyline([ll[i - 1], ll[i]], { color: "#b388ff", weight: 6, interactive: false }).addTo(routeLayer); continue; }
     if (sl <= 8) continue;
     L.polyline([ll[i - 1], ll[i]], { color: sl > 15 ? RED : AMBER, weight: 6, lineCap: "round", interactive: false }).addTo(routeLayer);
   }
@@ -316,7 +340,7 @@ function renderPanel(p, labels) {
   const names = lastNames;
   const [hh, mm] = ($("depart").value || "09:00").split(":").map(Number);
   const dep = hh + mm / 60;
-  const tl = Suit.timeline(p);                 // walking time + consumables at every sample
+  const tl = Suit.timeline(p, routeOpts(p));  // walking, driving and work time + consumables at every sample
   const have = Suit.available();
   const bud = Suit.budget(Suit.needsOf(tl), have);
   const lim = bud.limiting;
@@ -325,13 +349,19 @@ function renderPanel(p, labels) {
   const day = daylight(waypoints[0][0]);
   const round = $("roundtrip").checked;
   const steep = p.legs.filter((l) => l.max_slope_deg > 8).length;
+  const walkKm = s.distance_km - tl.driveKm;
+  const wx = typeof SpaceWx !== "undefined" ? SpaceWx.assess() : null;
+  const who = (key) => Suit.whoLimits(key);
   const pctLeft = (key, i) => Math.max(0, Math.round(((have[key] - tl[key][i]) / (key === "co2" ? 8 : Suit.CAP[{ o2: "o2Kg", battery: "batteryWh", water: "waterKg" }[key]])) * 100));
 
   let verdict, cls;
-  if (s.distance_km > 40) {
-    cls = "no"; verdict = `✗ ${fmtKm(s.distance_km)} is a rover traverse, not a walk — an EVA on foot covers roughly 5–20 km. Pick a closer destination, or drive most of the way and walk the last stretch.`;
+  if (walkKm > 40) {
+    cls = "no"; verdict = `✗ ${fmtKm(walkKm)} on foot is a rover traverse, not a walk — an EVA on foot covers roughly 5–20 km. ` +
+      (Suit.state.rover === "none" ? "Pick a closer destination, or add rover support in the Crew tab and drive the long legs." : "Mark the long legs 🚙 Drive in the directions below.");
   } else if (!bud.ok) {
-    cls = "no"; verdict = `✗ Not enough ${lim.name.toLowerCase()}: this walk needs ${lim.fmt(lim.need)} but only ${lim.fmt(lim.usable)} is usable after the ${reservePct}% reserve. Shorten the route, refill, or plan a rover leg.`;
+    cls = "no"; verdict = `✗ Not enough ${lim.name.toLowerCase()}${who(lim.key) ? ` in ${who(lim.key)} suit` : ""}: this walk needs ${lim.fmt(lim.need)} but only ${lim.fmt(lim.usable)} is usable after the ${reservePct}% reserve. Shorten the route, refill, cut station time, or drive a leg.`;
+  } else if (wx && wx.level === "nogo") {
+    cls = "no"; verdict = `✗ Space weather: ${wx.headline}. Stay in the shelter until it passes.`;
   } else if (!day) {
     cls = "no"; verdict = "✗ Polar night at this latitude right now — no daylight for an EVA.";
   } else if (finish > day.set) {
@@ -344,10 +374,12 @@ function renderPanel(p, labels) {
     cls = "ok"; verdict = `✓ Safe single EVA — back by ${clock(finish)}. Tightest supply: ${lim.name.toLowerCase()}, ${Math.round((1 - lim.frac) * 100)}% left at the end.`;
   }
   if (Suit.state.heartRate > 160) verdict += `<br>♥ Heart rate ${Suit.state.heartRate} bpm is high — rest before setting out.`;
+  if (+Suit.state.crew !== 2) verdict += "<br>👥 Solo EVA: crews have walked in pairs since Apollo, so each can help the other home — plan it as a buddy pair (Crew tab).";
+  if (wx && wx.level === "caution" && cls !== "no") verdict += `<br>☀ Space weather: ${wx.headline} — stay within quick reach of shelter.`;
 
   $("howto").hidden = true;
   $("summary").hidden = false;
-  const rover = s.distance_km > 40; // far beyond walking range: suit figures would be meaningless
+  const rover = walkKm > 40; // far beyond walking range: suit figures would be meaningless
   const sci = rover ? null : Science.routeCheck(p, tl, { round, depart: dep, finish, Ls: MarsTime.compute().Ls });
   const bars = rover ? "" : bud.items.map((it) => {
     const usedPct = Math.min(100, it.frac * 100), haveVsFull = it.avail;
@@ -363,6 +395,8 @@ function renderPanel(p, labels) {
     <div class="big">${rover ? fmtKm(s.distance_km) : fmtDur(tl.hours)}<small>${rover ? "rover-scale distance" : fmtKm(s.distance_km) + (round ? " round trip" : "")}</small></div>
     <div class="sub">${names[0]} → ${names[waypoints.length - 1]}${round ? " and back" : ""}</div>
     <div class="sub">↑ ${s.ascent_m} m climb · ↓ ${s.descent_m} m descent · max slope ${s.max_slope_deg}°</div>
+    ${rover ? "" : `<div class="sub">${[`walking ${fmtDur(tl.walkH)}`, tl.workH ? `work at stops ${fmtDur(tl.workH)}` : "", tl.driveH ? `driving ${fmtDur(tl.driveH)} (${fmtKm(tl.driveKm)})` : "", +Suit.state.crew === 2 ? "buddy pair" : "solo"].filter(Boolean).join(" · ")}</div>`}
+    ${p.legs.some((l) => l.detour) ? `<div class="sub detour">↝ Steered around ${p.legs.slice(0, waypoints.length - 1).reduce((a, l) => a + (l.detour ? l.detour.straight_steep_m : 0), 0)} m of ground steeper than 15° on the direct lines</div>` : ""}
     ${rover ? "" : `<div class="sub">Depart ${MarsTime.hhmm(dep)} → finish ≈ ${clock(finish)} local solar time${day ? ` · daylight ${MarsTime.hhmm(day.rise)}–${MarsTime.hhmm(day.set)}` : ""}</div>`}
     <div class="res"${rover ? " hidden" : ""}>
       <div class="res-head"><span>Share of what's in the suit this walk uses</span><span>reserve ${reservePct}%</span></div>
@@ -374,12 +408,19 @@ function renderPanel(p, labels) {
       <button id="nav-start" class="go">▶ Start Marswalk — live guidance</button>
       <button id="walk-3d" class="go alt" title="Fly along the route in 3D">⛰ Walk it in 3D</button>
       <button id="print-model" class="go alt" title="Make a 3D-printable relief model of this walk, with the route raised">🖨 Print model</button>
+      <button id="cuff" class="go alt" title="A printable Apollo-style cuff checklist and traverse map for the crew">📋 Cuff checklist</button>
+      <button id="hud-preview" class="go alt" title="Start live guidance in the helmet-visor display">🪖 Visor HUD</button>
     </div>
-    ${sci ? sci.html : ""}`;
+    ${sci ? sci.html : ""}
+    <div id="along"></div>`;
   drawWalkback(p, sci);
   $("nav-start").onclick = () => Nav.start();
   if (rover) { $("nav-start").disabled = true; $("nav-start").title = "Live guidance is for walks on foot"; }
   $("walk-3d").onclick = () => Globe.walk();
+  $("cuff").onclick = () => Checklist.open({ p, tl, labels, names, depart: dep, finish, round, sci, wx, day });
+  $("hud-preview").onclick = () => Nav.start({ visor: true });
+  if (rover) { $("cuff").disabled = $("hud-preview").disabled = true; }
+  if (typeof DataLayers !== "undefined" && !rover) DataLayers.along(p, waypoints.length - 1);
   $("print-model").onclick = () => {
     // the outbound walk (the way back retraces it) and its stops, to raise on the model
     const outbound = waypoints.length - 1, S = p.samples.filter((x) => x.leg < outbound);
@@ -396,11 +437,22 @@ function renderPanel(p, labels) {
   const stop = (j, title, meta, extra, kind) => {
     const d = document.createElement("div");
     d.className = `step stop ${kind}`;
+    const wp = j < waypoints.length ? waypoints[j] : null; // outbound stops carry tasks and work time
+    const task = wp && typeof Missions !== "undefined" ? Missions.taskAt(wp[0], wp[1]) : null;
+    const workMin = wp ? +stopWork.get(llKey(wp)) || 0 : 0;
+    const canWork = !!wp;
     d.innerHTML = `<div class="icon">${labels[j]}</div><div><div class="title">${title}</div><div class="meta">${meta}</div>${extra}
+      ${task ? `<div class="task">🔬 <b>${task.title}:</b> ${task.task}${task.kit ? `<div class="kit">Kit: ${task.kit}</div>` : ""}</div>` : ""}
+      ${canWork ? `<label class="work" title="Time spent working here before moving on (it counts against every suit supply)">⏱ Work here <input type="number" min="0" max="240" step="5" value="${workMin}"> min</label>` : ""}
       <button type="button" class="step-view" title="Ground view at ${labels[j]}">👁 Ground view</button></div>`;
     const s0 = j === 0 ? p.samples[0] : p.samples[p.legs[j - 1].to_idx];
     d.onclick = () => { highlightLayer.clearLayers(); map.flyTo([s0.lat, s0.lon], Math.max(map.getZoom(), 14)); };
     d.querySelector(".step-view").onclick = (ev) => { ev.stopPropagation(); GroundView.at(s0.lat, s0.lon, `${labels[j]}: ${names[j]}`); };
+    const wi = d.querySelector(".work input");
+    if (wi) {
+      wi.onclick = (ev) => ev.stopPropagation();
+      wi.onchange = () => { stopWork.set(llKey(wp), Math.max(0, Math.min(240, +wi.value || 0))); renderPanel(lastProfile, lastLabels); };
+    }
     el.appendChild(d);
   };
 
@@ -421,10 +473,20 @@ function renderPanel(p, labels) {
     if (leg.hazard_points) warn += `<div class="bad">⚠ ${leg.hazard_points} stretch(es) steeper than 15° — find a way around, don't climb straight up.</div>`;
     else if (leg.slope_class === "moderate") warn += `<div class="warn">Moderate slopes up to ${leg.max_slope_deg}° — slow down, watch your footing.</div>`;
     const legH = tl.t[leg.to_idx] - tl.t[leg.from_idx];
-    row.innerHTML = `<div class="icon">${TURN_ICON[leg.instruction] || "↑"}</div><div>
-      <div class="title">${leg.instruction} ${compassWord(leg.compass)} for ${fmtKm(leg.distance_km)}</div>
+    const a = p.samples[leg.from_idx], b = p.samples[leg.to_idx], ab = [[a.lat, a.lon], [b.lat, b.lon]];
+    const driven = isDriven(...ab);
+    if (driven) warn = leg.max_slope_deg > 25 ? `<div class="bad">⚠ Up to ${leg.max_slope_deg}° — steeper than an Apollo-style rover can climb (25°).</div>` : "";
+    row.innerHTML = `<div class="icon">${driven ? "🚙" : TURN_ICON[leg.instruction] || "↑"}</div><div>
+      <div class="title">${driven ? "Drive" : leg.instruction} ${compassWord(leg.compass)} for ${fmtKm(leg.distance_km)}</div>
       <div class="meta">${leg.terrain}</div>
-      <div class="meta">↑ ${leg.ascent_m} m · ↓ ${leg.descent_m} m · about ${fmtDur(legH)} on foot · uses ${((tl.o2[leg.to_idx] - tl.o2[leg.from_idx]) * 1000).toFixed(0)} g O₂</div>${warn}</div>`;
+      <div class="meta">↑ ${leg.ascent_m} m · ↓ ${leg.descent_m} m · about ${fmtDur(legH)} ${driven ? "by rover" : "on foot"} · uses ${((tl.o2[leg.to_idx] - tl.o2[leg.from_idx]) * 1000).toFixed(0)} g O₂</div>${warn}
+      ${Suit.state.rover !== "none" ? `<button type="button" class="leg-mode">${driven ? "🚶 Walk this leg instead" : "🚙 Drive this leg"}</button>` : ""}</div>`;
+    const lm = row.querySelector(".leg-mode");
+    if (lm) lm.onclick = (ev) => {
+      ev.stopPropagation();
+      if (driven) { driveLegs.delete(legKey(...ab)); driveLegs.delete(legKey(ab[1], ab[0])); } else driveLegs.add(legKey(...ab));
+      renderPanel(lastProfile, lastLabels); drawRoute(lastProfile, waypoints.length - 1);
+    };
     row.onclick = () => {
       el.querySelectorAll(".step").forEach((x) => x.classList.remove("active"));
       row.classList.add("active");
@@ -478,6 +540,7 @@ function drawWalkback(p, sci) {
 }
 
 Suit.onChange(() => { if (lastProfile) { renderPanel(lastProfile, lastLabels); drawRoute(lastProfile, waypoints.length - 1); } });
+SpaceWx.onChange(() => { if (lastProfile) renderPanel(lastProfile, lastLabels); }); // the go/no-go feeds the verdict
 
 // ---------- elevation profile ----------
 // Chart.js is only needed once a route exists, so it isn't part of the page's first load
@@ -722,7 +785,10 @@ $("place-q").addEventListener("blur", () => setTimeout(() => { results = []; ren
 
 // ---------- Mars clock & conditions ----------
 let condTarget = null;
-function updateConditions(lat, lon, label) { condTarget = { lat, lon, label }; renderConditions(); }
+function updateConditions(lat, lon, label) {
+  condTarget = { lat, lon, label }; renderConditions();
+  if (typeof DataLayers !== "undefined") DataLayers.here(lat, lon);
+}
 
 function renderConditions() {
   const t = MarsTime.compute();

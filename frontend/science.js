@@ -94,6 +94,18 @@ const Science = (() => {
       title: "NASA Space Flight Human-System Standard, Volume 1: Crew Health", venue: "NASA technical standard", url: null,
       finding: "Career limit of 600 mSv effective dose for every astronaut.",
       use: "Context for the walk's dose." },
+    { id: "jpl2024", topic: "rad", cite: "NASA/JPL 2024", year: 2024,
+      title: "NASA watches Mars light up during epic solar storm", venue: "NASA Jet Propulsion Laboratory news", url: "https://www.jpl.nasa.gov/news/nasa-watches-mars-light-up-during-epic-solar-storm/",
+      finding: "On 20 May 2024 particles from an X-class flare gave Curiosity's RAD about 8,100 µGy (≈ 8.1 mGy) — some 30 chest X-rays, the biggest surge it had measured.",
+      use: "Why the space-weather go/no-go and the time-to-shelter matter." },
+    { id: "donki", topic: "rad", cite: "NASA CCMC DONKI", year: 2026,
+      title: "Space Weather Database Of Notifications, Knowledge, Information", venue: "NASA Community Coordinated Modeling Center", url: "https://kauai.ccmc.gsfc.nasa.gov/DONKI/",
+      finding: "Flares with their source positions, solar energetic particle events, and CME arrival times at Earth, Mars and spacecraft from WSA-ENLIL model runs.",
+      use: "Live space weather: Mars-bound CMEs and flares from the side of the Sun facing Mars." },
+    { id: "swpc", topic: "rad", cite: "NOAA SWPC", year: 2026,
+      title: "GOES proton and X-ray flux, solar region reports, 3-day forecasts", venue: "NOAA Space Weather Prediction Center", url: "https://www.swpc.noaa.gov/",
+      finding: "Real-time ≥10 MeV proton flux (10 pfu = an S1 radiation storm), flares and each sunspot region's flare and proton probabilities.",
+      use: "Live space weather, translated from Earth's view to Mars'." },
     // ---- weather & dust ----
     { id: "cantor2006", topic: "dust", cite: "Cantor, Kanak & Edgett 2006", year: 2006,
       title: "Mars Orbiter Camera observations of Martian dust devils and their tracks (1997–2006)", venue: "J. Geophysical Research 111", url: doi("10.1029/2006JE002700"),
@@ -152,6 +164,76 @@ const Science = (() => {
       title: "Pulmonary toxicity of simulated lunar and Martian dusts in mice", venue: "Inhalation Toxicology 14", url: doi("10.1080/08958370290084683"),
       finding: "Mars soil simulant caused more lung inflammation and fibrosis than lunar simulant.",
       use: "Keep dust out of the habitat." },
+    // ---- orbital science data ----
+    { id: "tanaka2014", topic: "data", cite: "Tanaka et al. 2014", year: 2014,
+      title: "Geologic map of Mars (SIM 3292), 1:20,000,000", venue: "USGS Scientific Investigations Map 3292", url: "https://doi.org/10.3133/sim3292",
+      finding: "Every geologic unit on Mars, mapped from MOLA, THEMIS, HRSC and CTX data and dated Noachian (oldest), Hesperian or Amazonian.",
+      use: "The geologic map layer, the unit under any point, and the units a route crosses." },
+    { id: "carter2013", topic: "data", cite: "Carter et al. 2013", year: 2013,
+      title: "Hydrous minerals on Mars as seen by the CRISM and OMEGA imaging spectrometers: updated global view", venue: "J. Geophysical Research: Planets 118", url: doi("10.1029/2012JE004145"),
+      finding: "About 1,000 sites of water-altered minerals, mostly clays, almost all in the ancient southern highlands.",
+      use: "Hydrated-mineral points on the map and science stops along a route." },
+    { id: "ehlmann2014", topic: "data", cite: "Ehlmann & Edwards 2014", year: 2014,
+      title: "Mineralogy of the martian surface", venue: "Annual Review of Earth and Planetary Sciences 42", url: doi("10.1146/annurev-earth-060313-055024"),
+      finding: "Where Mars' clays, silica, sulfates, chlorides and carbonates are — each telling of a different kind of ancient water.",
+      use: "Water-formed minerals by class, and what each means for a sample." },
+    { id: "osterloo2010", topic: "data", cite: "Osterloo et al. 2010", year: 2010,
+      title: "Geologic context of proposed chloride-bearing materials on Mars", venue: "J. Geophysical Research 115", url: doi("10.1029/2010JE003613"),
+      finding: "About 640 chloride deposits in the southern highlands, the salt of evaporated ponds and lakes, mapped with THEMIS.",
+      use: "Chloride salt deposits on the map." },
+    { id: "fergason2006", topic: "data", cite: "Fergason, Christensen & Kieffer 2006", year: 2006,
+      title: "High-resolution thermal inertia derived from THEMIS: thermal model and applications", venue: "J. Geophysical Research 111", url: doi("10.1029/2006JE002735"),
+      finding: "Thermal inertia from night-time THEMIS images separates dust, sand, rocks and bedrock at 100 m scale.",
+      use: "The night-infrared layer: bright (warm at night) is rock, dark is loose dust." },
+    { id: "putzig2007", topic: "data", cite: "Putzig & Mellon 2007", year: 2007,
+      title: "Apparent thermal inertia and the surface heterogeneity of Mars", venue: "Icarus 191", url: doi("10.1016/j.icarus.2007.05.013"),
+      finding: "Global TES thermal inertia: low over the dusty Tharsis and Arabia, high where there's rock, crusted ground or ice.",
+      use: "The thermal-inertia layer (how firm the ground is)." },
+    { id: "ruff2002", topic: "data", cite: "Ruff & Christensen 2002", year: 2002,
+      title: "Bright and dark regions on Mars: particle size and mineralogical characteristics based on TES data", venue: "J. Geophysical Research 107", url: doi("10.1029/2001JE001580"),
+      finding: "A dust cover index from TES spectra shows where dust blankets the surface and hides the rock beneath.",
+      use: "The dust-cover layer." },
+    { id: "dundas2014", topic: "data", cite: "Dundas et al. 2014", year: 2014,
+      title: "HiRISE observations of new impact craters exposing Martian ground ice", venue: "J. Geophysical Research: Planets 119", url: doi("10.1002/2013JE004482"),
+      finding: "Fresh craters at mid-latitudes dug up bright, nearly pure water ice that faded over months as it sublimated.",
+      use: "Exposed-ice points, and the ice-prospecting EVA." },
+    { id: "mcewen2014", topic: "data", cite: "McEwen et al. 2014", year: 2014,
+      title: "Recurring slope lineae in equatorial regions of Mars", venue: "Nature Geoscience 7", url: doi("10.1038/ngeo2014"),
+      finding: "Dark streaks that grow down warm slopes each season, including in Valles Marineris.",
+      use: "RSL points: places to keep crews away from." },
+    { id: "rummel2014", topic: "data", cite: "Rummel et al. 2014", year: 2014,
+      title: "A new analysis of Mars 'Special Regions'", venue: "Astrobiology 14(11)", url: doi("10.1089/ast.2014.1227"),
+      finding: "Places where Earth microbes might grow, such as RSL, are Special Regions that missions must not contaminate.",
+      use: "Keep-out warnings near RSL." },
+    // ---- the science EVAs ----
+    { id: "msl2025", topic: "sci", cite: "NASA MSL Curiosity team 2025", year: 2025,
+      title: "Curiosity explores the boxwork on Mount Sharp", venue: "NASA Mars Science Laboratory mission updates", url: "https://science.nasa.gov/mission/msl-curiosity/",
+      finding: "In 2025 Curiosity reached a region of low, mineral-hardened ridges in a net-like pattern seen from orbit, thought to record groundwater flowing through cracks as Mars dried.",
+      use: "The boxwork EVA." },
+    { id: "hurowitz2025", topic: "sci", cite: "Hurowitz et al. 2025", year: 2025,
+      title: "Redox-driven mineral and organic associations in Jezero Crater, Mars", venue: "Nature", url: null,
+      finding: "The Cheyava Falls rock's 'leopard spots' hold iron phosphate and iron sulfide with organic matter: a potential biosignature.",
+      use: "The Cheyava Falls EVA." },
+    { id: "depot2023", topic: "sci", cite: "NASA/JPL 2023", year: 2023,
+      title: "Perseverance completes the first sample depot on another world (Three Forks)", venue: "NASA Mars 2020 mission news", url: null,
+      finding: "Ten sealed sample tubes were left on Jezero's floor at Three Forks between December 2022 and January 2023.",
+      use: "The sample-retrieval EVA." },
+    { id: "bramson2015", topic: "sci", cite: "Bramson et al. 2015", year: 2015,
+      title: "Widespread excess ice in Arcadia Planitia, Mars", venue: "Geophysical Research Letters 42", url: doi("10.1002/2015GL064844"),
+      finding: "Terraced craters and SHARAD radar point to tens of metres of nearly pure ice under Arcadia Planitia.",
+      use: "The ice-prospecting EVA." },
+    { id: "dundas2018", topic: "sci", cite: "Dundas et al. 2018", year: 2018,
+      title: "Exposed subsurface ice sheets in the Martian mid-latitudes", venue: "Science 359", url: doi("10.1126/science.aao1619"),
+      finding: "Eroding scarps expose clean ice sheets more than 100 m thick, starting within 1–2 m of the surface.",
+      use: "Why the northern mid-latitudes are good places for a base." },
+    { id: "squyres2008", topic: "sci", cite: "Squyres et al. 2008", year: 2008,
+      title: "Detection of silica-rich deposits on Mars", venue: "Science 320", url: doi("10.1126/science.1155429"),
+      finding: "Spirit found soil of up to ~90% opaline silica beside Home Plate, most likely from hot springs or steam vents.",
+      use: "The Columbia Hills EVA." },
+    { id: "morris2010", topic: "sci", cite: "Morris et al. 2010", year: 2010,
+      title: "Identification of carbonate-rich outcrops on Mars by the Spirit rover", venue: "Science 329", url: doi("10.1126/science.1189667"),
+      finding: "The Comanche outcrops hold 16–34% Mg-Fe carbonate, formed in water that was not acidic.",
+      use: "The Columbia Hills EVA." },
     // ---- maps & time ----
     { id: "allison2000", topic: "map", cite: "Allison & McEwen 2000", year: 2000,
       title: "A post-Pathfinder evaluation of areocentric solar coordinates with improved timing recipes for Mars seasonal/diurnal climate studies", venue: "Planetary and Space Science 48", url: doi("10.1016/S0032-0633(99)00092-6"),
@@ -166,8 +248,8 @@ const Science = (() => {
       finding: "Global laser altimetry of Mars; the reference surface for every elevation in the app.",
       use: "Fallback terrain." },
   ];
-  const TOPICS = { walk: "Walking on Mars", eva: "Life support & EVA planning", rad: "Radiation", dust: "Weather & dust",
-    ice: "Water, soil & resources", map: "Maps & time" };
+  const TOPICS = { walk: "Walking on Mars", eva: "Life support & EVA planning", rad: "Radiation & space weather", dust: "Weather & dust",
+    ice: "Water, soil & resources", data: "Orbital science data on the map", sci: "The science EVAs", map: "Maps & time" };
   const BY_ID = Object.fromEntries(REFS.map((r, i) => [r.id, { ...r, n: i + 1 }]));
 
   const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
@@ -281,6 +363,19 @@ const Science = (() => {
       : meanElev < GALE_ELEV_M - 1500 ? ` This route is lower than Gale's floor, with more air overhead, so expect a little less${cite("guo2017")}.` : "";
     row("", "☢", `Radiation ≈ <b>${msv < 0.1 ? msv.toFixed(3) : msv.toFixed(2)}–${(msv * SOLAR_MIN_FACTOR).toFixed(msv < 0.1 ? 3 : 2)} mSv</b> on this walk (0.64 mSv/day measured on Gale's floor${cite("hassler2014")}, up to ~50% more near solar minimum${cite("guo2021")}) — about ${Math.max(1, Math.round(msv / EARTH_BG_MSV_DAY))} days of Earth's natural background.${elevNote} For scale: the round trip to Mars adds ~660 mSv${cite("zeitlin2013")}; NASA's career limit is 600 mSv${cite("nasa3001")}.`);
 
+    // space weather: the go/no-go, and how far from shelter the walk ever gets
+    if (typeof SpaceWx !== "undefined") {
+      const wx = SpaceWx.assess(), end = S.length - 1;
+      let shelterH = 0;
+      for (let i = 0; i <= end; i++) shelterH = Math.max(shelterH, round ? Math.min(tl.t[i], tl.hours - tl.t[i]) : tl.t[i]);
+      const pr = Suit.state.rover === "pressurized";
+      const word = { go: "GO", caution: "CAUTION", nogo: "NO-GO", unknown: "not checked" }[wx.level];
+      row(wx.level === "go" ? "ok" : wx.level === "unknown" ? "" : "warn", "☀",
+        `Space weather <b>${word}</b>: ${wx.headline}${cite("donki", "swpc")}. ` +
+        (pr ? "The pressurised rover goes with you, so shelter is minutes away."
+          : `If an alert comes, the furthest you'll be from shelter at ${lastLabels[0] || "A"} is <b>${fmtDur(shelterH)}</b> on foot — the fastest particles can arrive within an hour of a flare${cite("jpl2024")}.`));
+    }
+
     // walk-back
     let far = 0, farI = 0;
     S.forEach((s, i) => { const d = distM(A, [s.lat, s.lon]); if (d > far) { far = d; farI = i; } });
@@ -300,7 +395,7 @@ const Science = (() => {
     if (frac > LOAD_FRAC) row(tl.hours > 4 ? "warn" : "", "🎒", `Suit + load ${Math.round(carried)} kg is ${Math.round(frac * 100)}% of your body mass. Lab studies project an 8-hour Mars walk is sustainable up to about 50%${cite("wickman1996")} — expect to tire sooner and plan rest stops.`);
 
     // pace
-    const kmh = p.stats.distance_km / (tl.hours || 1);
+    const kmh = (p.stats.distance_km - (tl.driveKm || 0)) / (tl.walkH || tl.hours || 1); // walking only: not work stops or rover legs
     row("", "🚶", `Planned pace ${kmh.toFixed(1)} km/h, held down by the suit. Unsuited, the cheapest walking speed on Mars is ${MARS_BEST_KMH} km/h${cite("cavagna1998")}, and above ≈ ${LOPE_KMH.toFixed(1)} km/h you'd naturally break into a lope${cite("kram1997")}. Mars gravity cuts the cost of walking by only about a third${cite("brown2018", "farley1992")}.`);
 
     // dust

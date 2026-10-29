@@ -3,9 +3,32 @@
 **Challenge:** Interplanetary Survival Guide: Martian Map (2026 NASA Space Apps, Intermediate)
 **Team:** Code Huzzlers
 
-A layered, integrated map of the Martian surface that helps an astronaut plan a **Marswalk**:
-draw a route, see its elevation profile, slope hazards, walking time against the suit's O₂
-budget, and the sun/daylight conditions at the destination.
+A layered, integrated map of the Martian surface that helps an astronaut plan and carry out a **Marswalk**.
+It pulls together data from many NASA missions:
+- **Optical:** Viking, MRO CTX and HiRISE.
+- **Thermal:** Mars Odyssey THEMIS and MGS TES.
+- **Spectral:** MRO CRISM and Mars Express OMEGA.
+- **Topographic:** MOLA, HRSC, and the CTX and HiRISE DTMs.
+- **Geologic:** the USGS global map.
+- **Radiation and space weather:** Curiosity RAD, NASA DONKI and NOAA GOES.
+- **Surface views:** Perseverance and Curiosity rover photos.
+
+You choose a science goal, draw a route that steers around steep ground, and see its elevation profile and slope hazards. The plan is checked against both suits' supplies (oxygen, battery, cooling water, CO₂ scrubber), with time for work at each stop and legs driven on a rover. It also checks daylight, radiation and space weather. You can walk it with live guidance on a tablet map or a helmet-visor HUD, and print an Apollo-style cuff checklist.
+
+## How it answers the challenge
+
+| The challenge asks for | Where it is in the app |
+|---|---|
+| Science goals and a location chosen for them (e.g. boxwork on Mount Sharp) | **Missions** tab: five science EVAs at Gale (boxwork, Curiosity 2025), Jezero (Cheyava Falls; Three Forks depot), Arcadia (fresh ice crater) and Gusev (Columbia Hills), each with stations, tasks, kit and work time |
+| At least three kinds of data, layered | Optical, thermal (THEMIS night IR, TES thermal inertia), spectral (CRISM/OMEGA minerals, TES dust), topographic, geologic (USGS SIM 3292), radiation and space weather — map layers with a legend, plus **What orbiters found here** in Conditions |
+| Science along the way | **🔬 Science along the way** under every route: the geologic units it crosses, plus mineral, salt and ice detections within 2 km, each with **+ Add as a science stop** |
+| Astronaut safety, radiation, space weather | Live **space weather go/no-go**: NASA DONKI and NOAA GOES, worked out for where Mars is around the Sun. Radiation dose per walk, time to shelter, turn-back alerts, point of no return |
+| Suits and equipment limit mobility | Pandolf effort model with carried kit; oxygen, CO₂ scrubber, cooling water and battery for **both** suits of a buddy pair; station work time; load vs body-mass limit |
+| A route that avoids obstacles such as large rock formations | **Walk around steep ground**: an A* search on the 20 m or 200 m terrain routes each leg around ground steeper than 15°. Rocky vs dusty ground is shown by the THEMIS night IR and TES thermal inertia layers |
+| Habitat display, tablet, or helmet HUD | The planner (habitat), live guidance (tablet) and the **🪖 Visor HUD**: compass tape, suit gauges, EVA clock, dose, space weather |
+| Point-of-view images | **Ground view**: rover Navcam frames around 360° at the nearest Perseverance or Curiosity stop, plus the 3D globe |
+| Rovers to carry crew and tools, astronauts in pairs | **Crew** tab: buddy pair (EV2's suit readings) and rover support. Any leg can be **🚙 driven**; the pressurised rover counts as shelter |
+| Inspiration from other missions' maps | Apollo-style **📋 cuff checklist** with a shaded-relief traverse map and turn-back rules per station, and **🖨 3D-printed relief models** like the ones Apollo crews trained with |
 
 ## Run
 
@@ -39,15 +62,71 @@ At the end, the Mars globe turns past famous places, then **unrolls into the fla
 | Layer | Resolution | Mission |
 |---|---|---|
 | THEMIS day-infrared global mosaic | 100 m/px | Mars Odyssey |
+| **THEMIS night-infrared global mosaic** (bright = rock, dark = dust) | 100 m/px | Mars Odyssey |
 | Viking color mosaic (default) | 232 m/px | Viking orbiters |
 | MOLA color elevation | 463 m/px | Mars Global Surveyor |
 | CTX Jezero mosaic (overlay) | 6 m/px | MRO |
 | HiRISE Jezero mosaic (overlay) | 25 cm/px | MRO |
+| **CTX Gale mosaic** (overlay) | 6 m/px | MRO |
+| **HiRISE Gale mosaic**: Curiosity's traverse (overlay) | 25 cm/px | MRO |
+| **USGS global geologic map, SIM 3292** (overlay) | 1:20M | USGS / NASA PGM program |
+| **TES thermal inertia** (overlay): loose dust vs rock, bedrock, ice | ~3 km/px | Mars Global Surveyor |
+| **TES dust cover index** (overlay) | ~3.5 km/px | Mars Global Surveyor |
+| **Water-formed minerals** (points): 1,642 CRISM/OMEGA hydrous detections, 2,417 clays/silica/sulfates/chlorides/carbonates, 642 THEMIS chloride deposits | | MRO, Mars Express, Mars Odyssey |
+| **Ice, RSL and active slopes** (points): 22 ice-exposing craters, 365 new craters, 60 RSL sites, 61 active gullies | | MRO HiRISE |
+
+The point layers come from NASA Mars Trek's feature services, compacted by `scripts/build_science_layers.py` into `data/science_features.json` (165 KB). A legend explains whichever science layers are on.
 
 **Terrain (heights, slopes):** uses the sharpest model covering each point.
 - CTX Jezero DTM, 20 m/px. This is the USGS Mars 2020 landing-navigation product, with coverage shown as a green dashed box on the map.
+- **HiRISE Gale DTM, 20 m/px**, covering Curiosity's whole traverse up lower Mount Sharp. It is exported by `scripts/fetch_data.py` from the 1 m HiRISE DEM that Mars Trek serves, and it lines up with the Jezero DTM and the HRSC blend to within a pixel.
 - **USGS HRSC/MOLA blended DEM, 200 m/px, everywhere on Mars.** `backend/globaldem.py` streams it as 513×513 LERC elevation tiles from Esri's public hosting of the same USGS product. One ~250 KB tile covers 1.4° (about 83 km), so a whole neighbourhood arrives in a single request. Spot checks against the USGS GeoTIFF agree to about 1 m. Tiles are cached on disk (`data/esri_dem/`) and in memory, so each area downloads once; if the service is unreachable the app falls back to MOLA.
 - MGS MOLA MEGDR, about 3.7 km/px, as the offline fallback.
+
+**Science EVAs (Missions tab):** ready-made Marswalks with a science goal, at places rovers and orbiters have studied closely. Stations are real rover positions (NASA MMGIS traverse data) or mapped detections.
+- **The boxwork of Mount Sharp** (Gale, Curiosity 2025): 5 stations from ridge to hollow. It is one way, with a pressurised-rover pickup.
+- **Leopard spots at Cheyava Falls** (Jezero, Perseverance 2024): the potential biosignature.
+- **Collect the Three Forks samples** (Jezero): the 10 cached tubes.
+- **Prospect for ice at a fresh crater** (Arcadia Planitia, HiRISE): rover out and back, with radar and an ice drill.
+- **Hot springs of the Columbia Hills** (Gusev, Spirit): carbonates, silica, and the soft sand at Troy.
+
+Each mission states the question it answers, why it needs people rather than a rover, and the stations with task, kit and minutes of work. **▶ Plan this EVA** loads it into the planner and turns on the data layers that matter. Station tasks then appear in the directions, the visor and the cuff checklist.
+
+**Walk around steep ground** (route option, on by default): `backend/pathfind.py` grids the terrain around each leg (20 m in Jezero and Gale, 200 m elsewhere) and runs A*.
+- Each step costs its suited walking time; ground over 15° costs 6×, and ground over 25° is blocked.
+- The grid path is then straightened wherever a direct line is no slower and crosses no steep ground.
+- Open ground stays a straight line; only the parts that need it bend around crater walls, scarps and big rock formations.
+- Example on Mount Sharp: the straight line had 8 stretches over 15° (max 30°); the safe route has none (max 14°) and is faster.
+- The summary says how much steep ground was avoided, and each leg's terrain line mentions its detour.
+
+**Space weather go/no-go (Conditions tab, route check, visor):** `/api/spaceweather` combines two sources:
+- **NASA DONKI:** flares with their source positions, solar energetic particle events, and CMEs whose WSA-ENLIL run predicts a Mars arrival.
+- **NOAA SWPC:** GOES ≥10 MeV protons and X-ray flares, and today's sunspot regions with their flare and proton probabilities.
+
+All of that is seen from Earth, so `frontend/spaceweather.js` computes where Mars is around the Sun from the two planets' orbits. From that it works out which regions face Mars and which are magnetically connected to it (the Parker-spiral footpoint, ~80° west of the sub-Mars point).
+
+It gives **GO / CAUTION / NO-GO** with reasons, which feed the route verdict and live-guidance alerts. Each route shows the worst-case time back to shelter. Context: on 20 May 2024 one X-class flare's particles gave Curiosity's RAD ~8.1 mGy. A source that is down (DONKI was, on 29 Oct 2026) is skipped and named, never waited on.
+
+**Crew & rover support (Crew tab):**
+- **Buddy pair (default):** enter EV2's suit readings. Every check (budget, turn-back, point of no return, visor gauges) uses whichever suit has less of each supply, because the pair walks home together. A solo EVA is flagged.
+- **Rover support:** open (Apollo-LRV style) or pressurised. With either, every leg in the directions gets a **🚙 Drive this leg** toggle.
+  - A driven leg runs at ~10 km/h (slower on slopes, max 25°), with the crew seated at resting effort (150 W).
+  - Long traverses become "drive most of the way, walk the last stretch" instead of "not feasible".
+  - A pressurised rover also counts as the radiation shelter.
+- **Work at stops:** each stop has **⏱ Work here … min** (missions fill these in). Station work counts at 250 W, inside the Apollo EVA average, against every suit supply.
+
+**📋 Cuff checklist:** the whole EVA on one printable page, like the wrist checklists Apollo 15–17 crews worked from.
+- A **shaded-relief traverse map** drawn from the same terrain, with stations, slope-coloured route, north arrow and scale.
+- The station table: task, kit, arrival time, km, elevation, O₂ left, and work time.
+- The **turn-back rule for each station**: the minimum oxygen, battery, water and CO₂ needed there to finish with the reserve intact.
+- The rules: space weather and shelter time, point of no return, reserve, the buddy rule, steep ground, and the Earth delay.
+
+**🪖 Visor HUD:** live guidance as a helmet-visor display.
+- A compass tape centred on the direction you're walking (from your last two fixes), with ◆ on the bearing to the next station or the way back to the route.
+- The next instruction and the station's task.
+- O₂, power, water and CO₂ gauges for the lower suit, with a tick for what the rest of the walk needs.
+- EVA time, ETA, distance to go, the sun, dose so far, space weather and Earth's light-time.
+- Alerts blink when they're urgent.
 
 **Directions (from → stops → to):** works like a maps app. A start or destination can be your position, a landing site, any of the 2,052 IAU-named places, typed coordinates (`-4.6, 137.4`), or a point chosen on the map. Stops can be added in between, and ⇅ swaps the ends. Every site, search result and dropped pin offers *Directions to here*, *Start from here*, *Add as stop* and *Ground view*. Points chosen on the map are named after the feature they're in, e.g. "Inside Jezero".
 
@@ -139,7 +218,7 @@ The route summary shows the share of each supply the walk uses and names the **l
 
 **Mars clock:** Mars Sol Date, MTC, Ls (season), Mars Year; local true solar time, sun elevation and daylight window at the destination, using the Mars24 algorithm (`frontend/marstime.js`). Also shows the live **signal delay to Earth** (JPL orbital elements), with a warning near solar conjunction.
 
-**Research-backed (Science tab):** 38 peer-reviewed and NASA sources, gathered with a SciSpace literature search. Each figure the app shows carries a small numbered link to its source. The Science tab lists every source with what it found and where the app uses it (`frontend/science.js`).
+**Research-backed (Science tab):** 58 peer-reviewed, NASA and USGS sources, gathered with a SciSpace literature search and from the datasets themselves. Each figure the app shows carries a small numbered link to its source. The Science tab lists every source with what it found and where the app uses it (`frontend/science.js`).
 - **Route research check**, under every route summary:
   - **Effort vs Apollo:** average power against the 229–352 W Apollo average. Peaks are flagged above the Apollo/Skylab maximum (581 W) or the Walkback-Test pace that overwhelmed suit cooling (≈ 700 W).
   - **Radiation dose for the walk:** 0.64 mSv/day measured by Curiosity's RAD, up to 50% more near solar minimum. Includes an altitude note (thinner air on high ground means more dose) and context: Earth background, the ~660 mSv trip to Mars, and NASA's 600 mSv career limit.
@@ -149,23 +228,23 @@ The route summary shows the share of each supply the walk uses and names the **l
   - **Dust:** dust-devil season and hours (Cantor 2006, Greeley 2010, Ferri 2003), the Amazonis and Hellas hotspots (Conway 2025), and dust-storm season (Ls 180–360°).
 - **Hazards & resources here**, in Conditions: radiation by altitude, dust devils and storms, near-surface convection (MEDA), ground-ice likelihood by latitude (SWIM, mid-latitude ice, pole-facing slopes), and perchlorate and dust toxicity.
 
-## Layers to add once challenge resources are live
+## Still to add
 
-- **More high-res terrain:** add DTMs for other sites. Drop a GeoTIFF in `data/` and add a `LocalDEM(...)` line in `terrain.py`.
-  The Jezero HiRISE DTM (1 m) exists too, but it's 1.8 GB.
-- **Imagery:** more HiRISE orthoimages beyond Jezero (Trek layer names from the WMTS GetCapabilities).
-- **Mineralogy:** CRISM / OMEGA hydrated-mineral maps, for science stops.
+- **More high-res terrain:** add DTMs for other sites. Drop a GeoTIFF (projected metres or plain lat/lon) in `data/` and add a `LocalDEM(...)` line in `terrain.py`. Mars Trek's Columbia Hills DEM was tried and left out: it disagrees with the HRSC blend by ~45 m.
 - **Subsurface ice:** the SWIM ice-consistency map itself (3 km/px), replacing today's latitude-band note.
-- **Conditions:** live MEDA (Perseverance) / REMS (Curiosity) weather, MCS dust opacity, RAD dose by sol,
-  TES/THEMIS thermal inertia (how loose the ground is underfoot).
-- **Science along the way:** auto-suggest stops where a route crosses mineral/ice/geology units.
+- **Conditions:** live MEDA (Perseverance) / REMS (Curiosity) weather, MCS dust opacity, RAD dose by sol.
+- **Rock hazard from thermal inertia values:** today the layers are shown, but the router only knows slope.
 
 ## Structure
 
 ```
 backend/app.py       FastAPI: /api/sites, /api/landmarks, /api/places, /api/whereis, /api/elevation, /api/dem,
-                     /api/profile, /api/rover/nearest, /api/rover/photos, /api/rover/track,
-                     /api/terrain/tile/{z}/{x}/{y}, /api/terrain/area, /api/imagery/{layer}/{z}/{y}/{x}, /api/features
+                     /api/profile (avoid=true: walk around steep ground), /api/rover/nearest, /api/rover/photos,
+                     /api/rover/track, /api/terrain/tile/{z}/{x}/{y}, /api/terrain/area, /api/imagery/{layer}/{z}/{y}/{x},
+                     /api/features, /api/science/features, /api/science/near, /api/science/along, /api/spaceweather
+backend/pathfind.py  A* walking routes around ground steeper than 15°, straightened where the ground allows
+backend/sciencedata.py  mineral, salt, ice and active-slope detections near a point or a route; USGS geologic unit (live)
+backend/spaceweather.py NASA DONKI + NOAA SWPC, fetched in parallel, cached 15 min, a down source skipped
 backend/places.py    IAU place-name search + "where am I" descriptions
 backend/globaldem.py 200 m global DEM as cached LERC tiles (USGS HRSC/MOLA blend, hosted by Esri)
 backend/imagery.py   the sharpest imagery layers for the 3D view, re-encoded once as small WebP tiles
@@ -176,15 +255,20 @@ frontend/intro.js    3D opener (galaxy → solar system → Mars → globe unrol
 frontend/score.js    the intro's synthesised soundtrack (Web Audio)
 frontend/directions.js  From → stops → To planner, search, choose-on-map, popup actions
 frontend/suit.js     astronaut & suit readings, metabolic/consumables model
-frontend/science.js  the 38 cited sources, route research check, walk-back / point of no return, hazard notes
+frontend/science.js  the 58 cited sources, route research check (incl. space weather + shelter time), walk-back, hazard notes
 frontend/groundview.js  rover photos look-around (hands 3D over to globe.js)
 frontend/globe.js    the 3D Mars globe (CesiumJS): streaming terrain + imagery, route, sites, names, rover tracks, fly-along
 frontend/navigate.js live guidance: route snapping, off-route, next turn, O2/turn-back
 frontend/printmodel.js  🖨 3D-printable relief models: area → mesh (route raised) → preview → binary STL
 frontend/landmarks.js   the 45 Mars landmarks guide (map layer + Sites tab)
+frontend/missions.js    the science EVAs (Missions tab): goals, stations, tasks, kit, work time
+frontend/datalayers.js  science layers + legend, "What orbiters found here", "Science along the way"
+frontend/spaceweather.js  space weather seen from Mars: facing/connected regions, Mars-bound CMEs, go/no-go
+frontend/checklist.js   the printable Apollo-style cuff checklist with a shaded-relief traverse map
 data/                sites.json, landmarks.json (OrbitStudio), mars_features.json; MOLA grid + Jezero DTM and the
                      tile caches (downloaded, git-ignored)
-scripts/fetch_data.py      downloads the elevation data
+scripts/fetch_data.py      downloads the elevation data (MOLA, Jezero CTX DTM, Gale HiRISE DTM)
+scripts/build_science_layers.py  rebuilds data/science_features.json from Mars Trek's feature services
 scripts/build_features.py  rebuilds data/mars_features.json from the USGS gazetteer
 scripts/build_textures.py  rebuilds the intro's Earth/Mars globe textures (needs Pillow)
 ```

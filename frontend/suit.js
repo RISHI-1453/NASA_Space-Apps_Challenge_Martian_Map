@@ -7,9 +7,14 @@
 // and a pressurised-suit penalty, and turn power into O2, CO2-scrubber, cooling-water and battery
 // use. Averages land inside the 229–352 W Apollo crews averaged on the Moon (Waligora et al. 1975).
 // Capacities default to ISS-EMU-class figures; edit CAP for a Mars suit design.
+//
+// A plan can also hold work time at the stops (station work, at Apollo-like effort), legs driven
+// on a rover (seated, at resting effort), and a second astronaut: with a buddy pair every check
+// uses whichever suit has less of each supply, because the pair walks home together.
 const Suit = (() => {
   const KEY = "martianmap.suit";
-  const DEFAULTS = { o2Pct: 100, batteryPct: 100, waterPct: 100, co2Hours: 8, bodyKg: 80, loadKg: 15, condition: "normal", reservePct: 20, heartRate: "" };
+  const DEFAULTS = { o2Pct: 100, batteryPct: 100, waterPct: 100, co2Hours: 8, bodyKg: 80, loadKg: 15, condition: "normal", reservePct: 20, heartRate: "",
+    crew: 2, o2Pct2: 100, batteryPct2: 100, waterPct2: 100, co2Hours2: 8, rover: "none" };
   const CAP = {
     o2Kg: 0.54,       // primary O2 bottle (EMU ≈ 1.2 lb)
     batteryWh: 400,   // suit battery
@@ -19,6 +24,10 @@ const Suit = (() => {
     systemsW: 45,     // fans, pumps, radio, lights
   };
   const PACE = { fresh: 1.0, normal: 0.9, tired: 0.75 };
+  const STATION_W = 250;    // working at a stop: inside the 229–352 W Apollo EVA average (Waligora et al. 1975)
+  const RIDE_W = 150;       // riding a rover in the suit: the model's resting rate
+  // an LRV-class rover: ~10 km/h on the flat, crawling on steep ground (Apollo's LRV managed 25° slopes)
+  const driveKmh = (s) => 10 * Math.max(0.25, 1 - Math.abs(Math.atan(s) * 180 / Math.PI) / 25);
   const MARS_WALK = 0.68;   // walking VO2 at 0.38 g ÷ at 1 g (Brown et al. 2018: 0.68 vs 1.00 L/min)
   const SUIT_PENALTY = 1.3; // extra effort of moving joints in a pressurised suit
   const TERRAIN = 1.3;      // Pandolf terrain factor for loose regolith
@@ -52,29 +61,52 @@ const Suit = (() => {
     { key: "water", name: "Cooling water", fmt: (x) => `${x.toFixed(1)} kg` },
   ];
 
-  const available = (s = st) => ({
-    o2: (CAP.o2Kg * s.o2Pct) / 100, battery: (CAP.batteryWh * s.batteryPct) / 100,
-    water: (CAP.waterKg * s.waterPct) / 100, co2: +s.co2Hours,
+  const suitHas = (o2Pct, batteryPct, waterPct, co2Hours) => ({
+    o2: (CAP.o2Kg * o2Pct) / 100, battery: (CAP.batteryWh * batteryPct) / 100, water: (CAP.waterKg * waterPct) / 100, co2: +co2Hours,
   });
+  // what the team can count on: a buddy pair is only as far from empty as the emptier suit
+  function available(s = st) {
+    const a = suitHas(s.o2Pct, s.batteryPct, s.waterPct, s.co2Hours);
+    if (+s.crew !== 2) return a;
+    const b = suitHas(s.o2Pct2, s.batteryPct2, s.waterPct2, s.co2Hours2);
+    return Object.fromEntries(Object.keys(a).map((k) => [k, Math.min(a[k], b[k])]));
+  }
+  // which astronaut's suit sets a supply's limit (for the verdict text)
+  function whoLimits(key, s = st) {
+    if (+s.crew !== 2) return "";
+    const a = suitHas(s.o2Pct, s.batteryPct, s.waterPct, s.co2Hours)[key], b = suitHas(s.o2Pct2, s.batteryPct2, s.waterPct2, s.co2Hours2)[key];
+    return b < a ? "EV2's" : a < b ? "EV1's" : "";
+  }
   const pace = () => PACE[st.condition] || 0.9;
 
-  // cumulative walking hours and consumables at every sample of a route profile
-  function timeline(p) {
-    const S = p.samples, n = S.length, k = pace();
+  // cumulative hours and consumables at every sample of a route profile.
+  // opts.dwell: {sampleIndex: hours of work there before moving on}; opts.drive(leg): driven, not walked
+  function timeline(p, opts = {}) {
+    const S = p.samples, n = S.length, k = pace(), dwell = opts.dwell || {}, drive = opts.drive || (() => false);
     const tl = { t: new Float64Array(n), o2: new Float64Array(n), co2: new Float64Array(n), battery: new Float64Array(n), water: new Float64Array(n) };
-    let workJ = 0, peakW = 0;
+    let workJ = 0, peakW = 0, walkH = 0, driveH = 0, workH = 0, driveKm = 0;
     for (let i = 1; i < n; i++) {
-      const dt = Math.max(0, (S[i].t_h - S[i - 1].t_h) / k);
-      const d = S[i].dist_m - S[i - 1].dist_m;
+      const d = S[i].dist_m - S[i - 1].dist_m, dz = S[i].elev_m - S[i - 1].elev_m;
+      const rides = drive(S[i].leg);
+      const dt = rides ? (d > 0 ? d / 1000 / driveKmh(dz / d) : 0) : Math.max(0, (S[i].t_h - S[i - 1].t_h) / k);
       const v = dt > 0 ? d / (dt * 3600) : 0;
-      const w = metabolicW(v, d > 0 ? ((S[i].elev_m - S[i - 1].elev_m) / d) * 100 : 0);
-      workJ += w * dt * 3600; peakW = Math.max(peakW, w);
-      tl.t[i] = tl.t[i - 1] + dt;
-      for (const r of RES) tl[r.key][i] = tl[r.key][i - 1] + RATE[r.key](w) * dt;
+      const w = rides ? RIDE_W : metabolicW(v, d > 0 ? (dz / d) * 100 : 0);
+      const stay = +dwell[i - 1] || 0; // station work at the sample we're leaving
+      workJ += w * dt * 3600 + STATION_W * stay * 3600;
+      if (!rides) peakW = Math.max(peakW, w);
+      if (rides) { driveH += dt; driveKm += d / 1000; } else walkH += dt;
+      workH += stay;
+      tl.t[i] = tl.t[i - 1] + dt + stay;
+      for (const r of RES) tl[r.key][i] = tl[r.key][i - 1] + RATE[r.key](w) * dt + RATE[r.key](STATION_W) * stay;
     }
-    tl.hours = tl.t[n - 1];
+    // work at the very end (the destination of a one-way walk) happens after the last step
+    const endStay = +dwell[n - 1] || 0;
+    tl.endUse = Object.fromEntries(RES.map((r) => [r.key, RATE[r.key](STATION_W) * endStay]));
+    workJ += STATION_W * endStay * 3600; workH += endStay;
+    tl.hours = tl.t[n - 1] + endStay;
     tl.avgW = tl.hours ? workJ / (tl.hours * 3600) : 0;
-    tl.peakW = peakW;
+    tl.peakW = peakW || RIDE_W;
+    Object.assign(tl, { walkH, driveH, workH, driveKm });
     return tl;
   }
 
@@ -88,7 +120,8 @@ const Suit = (() => {
     const limiting = items.reduce((a, b) => (b.need / (b.usable || 1e-9) > a.need / (a.usable || 1e-9) ? b : a));
     return { items, limiting, ok: items.every((x) => x.ok) };
   }
-  const needsOf = (tl, i0 = 0, i1 = tl.t.length - 1) => Object.fromEntries(RES.map((r) => [r.key, tl[r.key][i1] - tl[r.key][i0]]));
+  const needsOf = (tl, i0 = 0, i1 = tl.t.length - 1) => Object.fromEntries(RES.map((r) =>
+    [r.key, tl[r.key][i1] - tl[r.key][i0] + (i1 === tl.t.length - 1 ? tl.endUse?.[r.key] || 0 : 0)]));
 
   // hours and consumables to walk d metres with a height change of dz (for walk-back estimates)
   function stepCost(d, dz) {
@@ -113,9 +146,14 @@ const Suit = (() => {
     el.innerHTML = chip("O₂", `${st.o2Pct}%`, st.o2Pct < 40) + chip("battery", `${st.batteryPct}%`, st.batteryPct < 30) +
       chip("cooling water", `${st.waterPct}%`, st.waterPct < 30) + chip("CO₂ scrubber", `${(+st.co2Hours).toFixed(1)} h`, st.co2Hours < 2) +
       chip("carrying", `${st.loadKg} kg`) + chip("feeling", st.condition) +
-      (st.heartRate ? chip("heart rate", `${st.heartRate} bpm`, st.heartRate > 160) : "");
+      (st.heartRate ? chip("heart rate", `${st.heartRate} bpm`, st.heartRate > 160) : "") +
+      (+st.crew === 2 ? chip("EV2 O₂", `${st.o2Pct2}%`, st.o2Pct2 < 40) + chip("EV2 battery", `${st.batteryPct2}%`, st.batteryPct2 < 30) : chip("crew", "solo", true)) +
+      (st.rover !== "none" ? chip("support", st.rover === "pressurized" ? "pressurised rover" : "open rover") : "");
     const dot = document.getElementById("tab-me-dot");
-    if (dot) dot.hidden = !(st.o2Pct < 40 || st.batteryPct < 30 || st.waterPct < 30 || st.co2Hours < 2 || st.heartRate > 160);
+    if (dot) dot.hidden = !(st.o2Pct < 40 || st.batteryPct < 30 || st.waterPct < 30 || st.co2Hours < 2 || st.heartRate > 160 ||
+      (+st.crew === 2 && (st.o2Pct2 < 40 || st.batteryPct2 < 30 || st.waterPct2 < 30 || st.co2Hours2 < 2)));
+    const ev2 = document.getElementById("ev2-set");
+    if (ev2) ev2.hidden = +st.crew !== 2;
     const f = document.getElementById("suit-form");
     if (f && !f.contains(document.activeElement)) for (const [k, v] of Object.entries(st)) if (f.elements[k]) f.elements[k].value = v;
   }
@@ -129,11 +167,13 @@ const Suit = (() => {
       set({ [el.name]: v });
     });
     f.addEventListener("submit", (e) => e.preventDefault());
-    document.getElementById("suit-reset")?.addEventListener("click", () => set({ o2Pct: 100, batteryPct: 100, waterPct: 100, co2Hours: 8, heartRate: "" }));
+    document.getElementById("suit-reset")?.addEventListener("click", () => set({ o2Pct: 100, batteryPct: 100, waterPct: 100, co2Hours: 8, heartRate: "",
+      o2Pct2: 100, batteryPct2: 100, waterPct2: 100, co2Hours2: 8 }));
   }
   bindForm(); renderSummary(); // scripts are deferred, so the form is already in the page
 
   const rates = (w) => Object.fromEntries(RES.map((r) => [r.key, RATE[r.key](w)])); // per hour at power w
   const FULL = { o2: CAP.o2Kg, co2: 8, battery: CAP.batteryWh, water: CAP.waterKg };       // a full suit
-  return { get state() { return st; }, CAP, FULL, RES, set, onChange, timeline, budget, needsOf, stepCost, available, pace, metabolicW, rates };
+  return { get state() { return st; }, CAP, FULL, RES, set, onChange, timeline, budget, needsOf, stepCost, available, whoLimits, pace, metabolicW, rates,
+    STATION_W, RIDE_W, driveKmh };
 })();
