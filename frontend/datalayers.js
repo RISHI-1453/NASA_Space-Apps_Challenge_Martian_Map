@@ -13,15 +13,8 @@ const DataLayers = (() => {
   const dust = trek("tes_ruffdust", "png", 2, { opacity: 0.6 });
   const geology = L.tileLayer("https://trek.nasa.gov/mars/trekarcgis/rest/services/SIM3292_Global_Geology/MapServer/WMTS/tile/1.0.0/SIM3292_Global_Geology/default/default028mm/{z}/{y}/{x}.png",
     { tileSize: 256, maxNativeZoom: 11, maxZoom: 18, noWrap: true, opacity: 0.55, attribution: "USGS SIM 3292 (Tanaka et al. 2014) · Mars Trek" });
-  layersControl.addBaseLayer(nightIR, "THEMIS night infrared · 100 m (rock vs dust)");
-  layersControl.addOverlay(geology, "Geologic map · USGS");
-  layersControl.addOverlay(inertia, "Thermal inertia · TES (rock vs dust)");
-  layersControl.addOverlay(dust, "Dust cover · TES");
-
   // ---------- points: minerals, salts, ice, active slopes ----------
   const minerals = L.layerGroup(), active = L.layerGroup();
-  layersControl.addOverlay(minerals, "Water-formed minerals · CRISM/OMEGA/THEMIS");
-  layersControl.addOverlay(active, "Ice, RSL & active slopes · HiRISE");
   const renderer = L.canvas({ padding: 0.3 });
   const MINERAL = { // colours as in Ehlmann & Edwards (2014)'s map
     phyllosilicate: ["#3d9bff", "Clay minerals"], silica: ["#a46bff", "Opaline silica"], sulfate: ["#ff9f1c", "Sulfates"],
@@ -73,23 +66,41 @@ const DataLayers = (() => {
     unstable: "Slopes that are still moving today (seasonal CO₂ frost and sand) — unstable ground",
     fresh: "Formed in the last few decades; fresh rock, but loose blocks around the rim",
   };
-  map.on("overlayadd", (e) => { if (e.layer === minerals || e.layer === active) build(); legend(); });
-  map.on("overlayremove baselayerchange", legend);
+  // ---------- what each science layer means: shown in the Layers panel and in the legend chip ----------
+  const key = (c, t, ring) => `<span class="dl-key"><i style="background:${ring ? "transparent" : c};border-color:${c}"></i>${t}</span>`;
+  const LEGEND = [
+    [nightIR, "Night infrared", () => `<i>Bright</i>: rock and bedrock that stay warm at night (firm footing, sharp blocks). <i>Dark</i>: fine dust and sand (soft, slow going).`],
+    [geology, "Geologic map", () => `Each colour is a rock unit. The unit and its age at any spot are in <i>Conditions → What orbiters found here</i>.`],
+    [inertia, "Thermal inertia", () => `<span class="dl-ramp ti"></span> low: loose dust → high: rock, bedrock, ice`],
+    [dust, "Dust cover", () => `<span class="dl-ramp dci"></span> thick dust (hides the rock, clogs joints) → dust-free`],
+    [minerals, "Water-formed minerals", () => Object.values(MINERAL).map(([c, t]) => key(c, t)).join("") + key("#00d0ff", "hydrated (CRISM/OMEGA)") + key("#ffe14d", "salt deposit", true)],
+    [active, "Ice & active slopes", () => Object.values(ACTIVE).map(([c, t]) => key(c, t)).join("")],
+  ];
+  const legendOf = (layer) => LEGEND.find((l) => l[0] === layer)[2];
+  layersControl.addBaseLayer(nightIR, "THEMIS night infrared", { note: "Mars Odyssey · 100 m · rock vs dust", legend: legendOf(nightIR) });
+  layersControl.addOverlay(geology, "Geologic map", { group: "Science data", note: "USGS SIM 3292 · rock units and their ages", legend: legendOf(geology) });
+  layersControl.addOverlay(inertia, "Thermal inertia", { group: "Science data", note: "MGS TES · how firm the ground is", legend: legendOf(inertia) });
+  layersControl.addOverlay(dust, "Dust cover", { group: "Science data", note: "MGS TES · where dust hides the rock", legend: legendOf(dust) });
+  layersControl.addOverlay(minerals, "Water-formed minerals", { group: "Science data", note: "CRISM · OMEGA · THEMIS: clays, silica, salts…", legend: legendOf(minerals) });
+  layersControl.addOverlay(active, "Ice & active slopes", { group: "Science data", note: "HiRISE: exposed ice, RSL keep-outs, gullies", legend: legendOf(active) });
+  map.on("layeradd", (e) => { if (e.layer === minerals || e.layer === active) build(); });
+  map.on("layeradd layerremove", (e) => { if (LEGEND.some((l) => l[0] === e.layer)) legend(); });
 
-  // ---------- legend: what the visible science layers mean ----------
-  const Legend = L.Control.extend({ onAdd() { const d = L.DomUtil.create("div", "data-legend"); L.DomEvent.disableClickPropagation(d); return d; } });
-  const leg = new Legend({ position: "bottomleft" }).addTo(map);
+  // a small "Legend" chip on the map, closed until asked for; it only exists while a science layer is on
+  const Legend = L.Control.extend({ options: { position: "bottomleft" }, onAdd() {
+    const d = L.DomUtil.create("div", "map-legend");
+    d.innerHTML = `<button type="button" class="map-btn lg-toggle" aria-expanded="false"></button><div class="lg-body" hidden></div>`;
+    L.DomEvent.disableClickPropagation(d); L.DomEvent.disableScrollPropagation(d);
+    d.querySelector(".lg-toggle").onclick = () => { const b = d.querySelector(".lg-body"); b.hidden = !b.hidden; legend(); };
+    return d;
+  } });
+  const leg = new Legend().addTo(map);
   function legend() {
-    const el = leg.getContainer(), parts = [];
-    const key = (c, t, ring) => `<span class="dl-key"><i style="background:${ring ? "transparent" : c};border-color:${c}"></i>${t}</span>`;
-    if (map.hasLayer(nightIR)) parts.push(`<b>Night infrared</b> (Mars Odyssey THEMIS): <i>bright</i> = rock and bedrock that stay warm at night (firm footing, sharp blocks); <i>dark</i> = fine dust and sand (soft, slow going).`);
-    if (map.hasLayer(inertia)) parts.push(`<b>Thermal inertia</b> (MGS TES, 3 km): <span class="dl-ramp ti"></span> low (loose dust) → high (rock, bedrock, ice).`);
-    if (map.hasLayer(dust)) parts.push(`<b>Dust cover</b> (MGS TES): <span class="dl-ramp dci"></span> thick dust (hides the rock, clogs joints) → dust-free.`);
-    if (map.hasLayer(geology)) parts.push(`<b>Geologic map</b> (USGS SIM 3292): each colour is a rock unit. The unit and its age at any spot are in <i>Conditions → What orbiters found here</i>.`);
-    if (map.hasLayer(minerals)) parts.push(`<b>Water-formed minerals</b>: ${Object.values(MINERAL).map(([c, t]) => key(c, t)).join("")}${key("#00d0ff", "hydrated (CRISM/OMEGA)")}${key("#ffe14d", "salt deposit", true)}`);
-    if (map.hasLayer(active)) parts.push(`<b>Active surface</b> (HiRISE): ${Object.values(ACTIVE).map(([c, t]) => key(c, t)).join("")}`);
-    el.innerHTML = parts.map((p) => `<div>${p}</div>`).join("");
-    el.hidden = !parts.length;
+    const el = leg.getContainer(), on = LEGEND.filter(([l]) => map.hasLayer(l)), body = el.querySelector(".lg-body");
+    el.hidden = !on.length;
+    el.querySelector(".lg-toggle").textContent = body.hidden ? `ⓘ Legend · ${on.length}` : "ⓘ Legend ✕";
+    el.querySelector(".lg-toggle").setAttribute("aria-expanded", String(!body.hidden));
+    body.innerHTML = on.map(([, name, html]) => `<div><b>${name}</b> ${html()}</div>`).join("");
   }
   legend();
 
@@ -129,7 +140,7 @@ const DataLayers = (() => {
     if (!el) return;
     const S = p.samples.filter((s) => s.leg < outbound);
     const step = Math.max(1, Math.ceil(S.length / 4000)), pts = S.filter((_, i) => i % step === 0);
-    el.innerHTML = `<div class="sci"><div class="sci-head">🔬 Science along the way</div><div class="calc"><span class="gv-spin"></span>Checking orbital maps along the route…</div></div>`;
+    el.innerHTML = `<div class="sci fold"><div class="sci-head">🧭 Science along the way <span class="badge"><span class="gv-spin"></span> checking</span></div></div>`;
     let d;
     try {
       const r = await fetch("/api/science/along", { method: "POST", headers: { "Content-Type": "application/json" },
@@ -155,7 +166,9 @@ const DataLayers = (() => {
         `<b>${f.name}</b> ${where}. ${cap(f.what)}.` + (atStop >= 0 ? "" : ` <button type="button" class="link add-sci" data-i="${d.features.indexOf(f)}">+ Add as a science stop</button>`));
     }
     if (!hits.length) row("", "💎", `No mapped mineral, salt or ice detections within 2 km of this route${cite("carter2013", "ehlmann2014")}. Orbital maps are kilometre-scale: at the stops, look for colour changes, veins and layering that only a person on the ground can see.`);
-    el.innerHTML = `<div class="sci"><div class="sci-head">🔬 Science along the way</div>${rows.join("")}</div>`;
+    const n = hits.filter((f) => f.group !== "keepout").length, keepouts = hits.filter((f) => f.group === "keepout").length;
+    const badge = keepouts ? `<span class="badge warn">⛔ ${keepouts} keep-out</span>` : n ? `<span class="badge go">${n} target${n > 1 ? "s" : ""} nearby</span>` : `<span class="badge">geology only</span>`;
+    el.innerHTML = `<details class="sci fold"${keepouts ? " open" : ""}><summary class="sci-head">🧭 Science along the way ${badge}</summary>${rows.join("")}</details>`;
     el.querySelectorAll(".add-sci").forEach((b) => (b.onclick = () => {
       const f = d.features[+b.dataset.i], s = pts[f.route_idx];
       const at = Math.min(waypoints.length - 1, s.leg + 1);
@@ -168,7 +181,5 @@ const DataLayers = (() => {
 
   return { here, along, layers: { nightIR, inertia, dust, geology, minerals, active }, build, show(names) {
     for (const n of names) { const l = DataLayers.layers[n]; if (l && !map.hasLayer(l)) { if (l === nightIR) map.eachLayer((x) => Object.values(baseLayers).includes(x) && map.removeLayer(x)); l.addTo(map); } }
-    if (names.includes("minerals") || names.includes("active")) build();
-    legend();
   } };
 })();

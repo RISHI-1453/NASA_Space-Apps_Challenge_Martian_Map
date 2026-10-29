@@ -404,7 +404,9 @@ const Science = (() => {
     if (dd.level > 0 && devilHours) row(dd.level > 1 ? "warn" : "", "🌪", `${dd.text}${dd.cites}, and your walk overlaps the 09:00–15:00 dust-devil hours${cite("ferri2003")}. Watch the horizon for plumes; dust clings to visors and joints${cite("marshall1999")}.`);
     if (stormSeason(Ls)) row("", "🌫", `It's dust-storm season (Ls ${Ls.toFixed(0)}°: southern spring–summer)${cite("fernandez1997", "cantor2001")} — check orbital weather before a long walk.`);
 
-    return { html: `<div class="sci"><div class="sci-head">🔬 What the research says about this walk</div>${rows.join("")}</div>`, turnBack: tb, far: farI };
+    const toCheck = rows.filter((r) => r.includes('sci-row warn')).length;
+    const badge = toCheck ? `<span class="badge warn">⚠ ${toCheck} to check</span>` : `<span class="badge ok">✓ all clear</span>`;
+    return { html: `<details class="sci fold"><summary class="sci-head">🔬 What the research says ${badge}</summary>${rows.join("")}</details>`, turnBack: tb, far: farI };
   }
 
   // ---------- Conditions tab: hazards & resources at a place ----------

@@ -57,7 +57,15 @@ At the end, the Mars globe turns past famous places, then **unrolls into the fla
 
 ## What works now
 
-**Map layers (all NASA Mars Trek WMTS):**
+**Screen layout:** every control has its own place, so nothing covers anything else.
+- **On the map:** zoom at the top left; **🗂 Layers** and **🌐 3D view** at the top right; the legend chip, the cursor readout and the scale stack at the bottom left.
+- **Route summary:** one main button (▶ Start Marswalk), then four tools (🪖 Visor HUD, ⛰ Walk in 3D, 📋 Checklist, 🖨 3D print).
+- **Folded cards:** the research check and *Science along the way* open on demand and show a status badge.
+- **Live guidance:** the cards stack in a top dock and a bottom dock.
+- **The visor:** goes full screen, with all of its controls in one toolbar.
+- **Phones:** the visor and live guidance have their own layouts.
+
+**Map layers (all NASA Mars Trek WMTS):** all in the **🗂 Layers** panel, grouped into *Base map*, *Science data*, *Close-up imagery* and *On the map*, each with a one-line note. When a science layer is on, what its colours mean appears under it and in the **ⓘ Legend** chip on the map.
 
 | Layer | Resolution | Mission |
 |---|---|---|
@@ -121,7 +129,7 @@ It gives **GO / CAUTION / NO-GO** with reasons, which feed the route verdict and
 - The **turn-back rule for each station**: the minimum oxygen, battery, water and CO₂ needed there to finish with the reserve intact.
 - The rules: space weather and shelter time, point of no return, reserve, the buddy rule, steep ground, and the Earth delay.
 
-**🪖 Visor HUD:** live guidance as a helmet-visor display.
+**🪖 Visor HUD:** live guidance as a full-screen helmet-visor display. The side panel and map buttons step aside, and the map stays live underneath for panning, zooming and tapping your position. One toolbar along the bottom holds: tap or type a position fix, suit readings, look around, back to the map view, and end EVA.
 - A compass tape centred on the direction you're walking (from your last two fixes), with ◆ on the bearing to the next station or the way back to the route.
 - The next instruction and the station's task.
 - O₂, power, water and CO₂ gauges for the lower suit, with a tick for what the rest of the walk needs.

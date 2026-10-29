@@ -65,18 +65,24 @@ const Nav = (() => {
   // ---- HUD ----
   function buildHud() {
     const c = map.getContainer();
-    const mk = (cls, html = "") => { const d = document.createElement("div"); d.className = cls; d.innerHTML = html; c.appendChild(d); return d; };
-    ui.top = mk("nav-top");
-    ui.alert = mk("nav-alert");
+    const mk = (cls, html = "", into = c) => { const d = document.createElement("div"); d.className = cls; d.innerHTML = html; into.appendChild(d); return d; };
+    // two docks, top and bottom: the cards inside stack in normal flow, so on any screen size they
+    // push each other along instead of overlapping
+    ui.topDock = mk("nav-dock nav-dock-top");
+    ui.dock = mk("nav-dock nav-dock-bottom");
+    ui.top = mk("nav-top", "", ui.topDock);
+    ui.alert = mk("nav-alert", "", ui.topDock);
     ui.alert.hidden = true;
-    ui.bottom = mk("nav-bottom");
-    ui.ctrl = mk("nav-ctrl", `
+    ui.ctrl = mk("nav-ctrl", "", ui.dock);
+    ui.bottom = mk("nav-bottom", "", ui.dock);
+    ui.ctrl.innerHTML = (`
       <div class="nav-ctrl-col">
         <b>Report your position</b>
         <button id="nav-tap" type="button">📍 Tap my position on the map</button>
         <form id="nav-coord" class="nav-ctrl-row"><input id="nav-coord-in" placeholder="or type lat, lon" aria-label="Nav fix coordinates" autocomplete="off"><button type="submit">Go</button></form>
         <span class="muted small" id="nav-lastfix">You start at A. Whenever your suit or rover gives a position fix, tap it on the map or type it here; the guidance updates from each fix.</span>
       </div>`);
+    if (matchMedia("(max-width: 760px)").matches) window.scrollTo({ top: 0 }); // the map is at the top of the page on phones
     L.DomEvent.disableClickPropagation(ui.ctrl);
     L.DomEvent.disableClickPropagation(ui.bottom);
     ui.ctrl.querySelector("#nav-tap").onclick = () => armTap(!tapArmed);
@@ -112,6 +118,8 @@ const Nav = (() => {
     const lf = document.getElementById("nav-lastfix");
     const HOW = { tap: "map tap", typed: "typed", start: "route start" };
     if (lf && how !== "refresh") lf.textContent = `Last fix (${HOW[how] || "position"}): ${fmtLatLon(lat, lon)} ±${Math.round(acc)} m`;
+    const vf = ui.visor?.querySelector(".v-fixtext");
+    if (vf && how !== "refresh") vf.textContent = `Last fix (${HOW[how] || "position"}): ${fmtLatLon(lat, lon)} ±${Math.round(acc)} m`;
     if (!offRoute) progress = Math.max(progress, along);
 
     trail.addLatLng([lat, lon]);
@@ -301,20 +309,51 @@ const Nav = (() => {
   }
 
   // ---- helmet-visor HUD ----
+  // Full screen, like a real visor: the header, side panel and map buttons step aside, the map
+  // stays live underneath (pan, zoom, tap your position), and every control the crew needs is in
+  // one toolbar along the bottom — nothing floats on top of anything else.
   function setVisor(on) {
+    const was = visor;
     visor = on && active;
     document.body.classList.toggle("visor-on", visor);
+    if (was !== visor) setTimeout(() => { map.invalidateSize(); if (lastState) map.panTo([lastState.lat, lastState.lon], { animate: false }); }, 30);
     if (!visor) { ui.visor?.remove(); delete ui.visor; return; }
     if (!ui.visor) {
       const d = document.createElement("div");
       d.className = "visor";
-      d.innerHTML = `<div class="v-glass"></div><div class="v-tape"><div class="v-ticks"></div><div class="v-caret">▼</div></div>
-        <div class="v-left"></div><div class="v-right"></div><div class="v-center"></div><div class="v-alert" hidden></div>
-        <div class="v-reticle"></div><button type="button" class="v-exit">✕ Exit visor</button>`;
-      L.DomEvent.disableClickPropagation(d);
-      d.querySelector(".v-exit").onclick = () => setVisor(false);
+      d.innerHTML = `<div class="v-glass"></div><div class="v-reticle"></div>
+        <div class="v-hud">
+          <div class="v-tape"><div class="v-ticks"></div><div class="v-caret">▼</div></div>
+          <div class="v-center"></div>
+          <div class="v-left"></div>
+          <div class="v-right"></div>
+          <div class="v-alert" hidden></div>
+          <div class="v-dock">
+            <div class="v-fixtext">Report each position fix: tap it on the map or type it.</div>
+            <div class="v-bar">
+              <button type="button" data-v="tap">📍 Tap my position</button>
+              <form class="v-fix"><input placeholder="or type lat, lon" aria-label="Position fix coordinates" autocomplete="off"><button type="submit">Go</button></form>
+              <button type="button" data-v="readings">Suit readings</button>
+              <button type="button" data-v="view">👁 Look around</button>
+              <button type="button" data-v="exit">🗺 Map view</button>
+              <button type="button" data-v="end" class="v-end">End EVA</button>
+            </div>
+          </div>
+        </div>`;
+      L.DomEvent.disableClickPropagation(d.querySelector(".v-dock"));
+      const act = { tap: () => armTap(!tapArmed), readings: () => lastState && openReadings(lastState.left), exit: () => setVisor(false), end: stop,
+        view: () => lastState && typeof GroundView !== "undefined" && GroundView.at(lastState.lat, lastState.lon, "Your position") };
+      d.querySelectorAll("[data-v]").forEach((b) => (b.onclick = () => act[b.dataset.v]()));
+      d.querySelector(".v-fix").onsubmit = (e) => {
+        e.preventDefault();
+        const inp = e.target.querySelector("input"), c = parseCoords(inp.value || "");
+        if (!c) { d.querySelector(".v-fixtext").textContent = "Couldn't read that — try e.g. 18.4521, 77.4380"; return; }
+        inp.value = "";
+        fix(c[0], c[1], 15, "typed");
+      };
       map.getContainer().appendChild(d);
       ui.visor = d;
+      armTap(tapArmed);
     }
     render(lastState);
   }
@@ -368,6 +407,8 @@ const Nav = (() => {
     tapArmed = on;
     const b = document.getElementById("nav-tap");
     if (b) { b.classList.toggle("active", on); b.textContent = on ? "Tap where you are… (Esc to cancel)" : "📍 Tap my position on the map"; }
+    const vb = ui.visor?.querySelector('[data-v="tap"]');
+    if (vb) { vb.classList.toggle("active", on); vb.textContent = on ? "Tap the map… (Esc)" : "📍 Tap my position"; }
     map.getContainer().style.cursor = on ? "crosshair" : "";
   }
   map.on("click", (e) => {

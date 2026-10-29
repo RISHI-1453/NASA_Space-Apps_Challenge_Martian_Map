@@ -24,11 +24,13 @@ const map = L.map("map", {
 
 // Global basemaps (pick one)
 const baseLayers = {
-  "Viking color mosaic · 232 m": trek("Mars_Viking_MDIM21_ClrMosaic_global_232m", "jpg", 7),
-  "THEMIS day infrared · 100 m": trek("THEMIS_DayIR_ControlledMosaics_100m_v2_oct2018", "png", 9),
-  "MOLA color elevation · 463 m": trek("Mars_MGS_MOLA_ClrShade_merge_global_463m", "jpg", 6),
+  "Viking colour": trek("Mars_Viking_MDIM21_ClrMosaic_global_232m", "jpg", 7),
+  "THEMIS day infrared": trek("THEMIS_DayIR_ControlledMosaics_100m_v2_oct2018", "png", 9),
+  "MOLA elevation colours": trek("Mars_MGS_MOLA_ClrShade_merge_global_463m", "jpg", 6),
 };
-baseLayers["Viking color mosaic · 232 m"].addTo(map);
+const BASE_NOTES = { "Viking colour": "Viking orbiters · 232 m", "THEMIS day infrared": "Mars Odyssey · 100 m · shows the shape of the land",
+  "MOLA elevation colours": "Mars Global Surveyor · 463 m · blue low, red high" };
+baseLayers["Viking colour"].addTo(map);
 // High-resolution local mosaics, drawn on top only where they have coverage (Jezero crater)
 const JEZ_CTX = [[18.2110, 77.1605], [18.7212, 77.6992]];
 const JEZ_HIRISE = [[18.3068, 77.2229], [18.6693, 77.5840]];
@@ -36,10 +38,10 @@ const JEZ_HIRISE = [[18.3068, 77.2229], [18.6693, 77.5840]];
 const GALE_CTX = [[-6.5733, 135.1843], [-2.8078, 139.2413]];
 const GALE_HIRISE = [[-4.9255, 137.1225], [-4.2490, 137.7298]];
 const hiresLayers = {
-  "CTX Jezero mosaic · 6 m": trek("JEZ_ctx_B_soc_008_orthoMosaic_6m_Eqc_latTs0_lon0", "png", 13, { bounds: JEZ_CTX, minZoom: 8 }).addTo(map),
-  "HiRISE Jezero mosaic · 25 cm": trek("JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd", "png", 17, { bounds: JEZ_HIRISE, minZoom: 10 }).addTo(map),
-  "CTX Gale mosaic · 6 m": trek("Gale_CTX_BlockAdj_dd", "png", 12, { bounds: GALE_CTX, minZoom: 8 }).addTo(map),
-  "HiRISE Gale mosaic · 25 cm": trek("curiosity_hirise_mosaic", "png", 16, { bounds: GALE_HIRISE, minZoom: 10 }).addTo(map),
+  "Jezero · CTX 6 m": trek("JEZ_ctx_B_soc_008_orthoMosaic_6m_Eqc_latTs0_lon0", "png", 13, { bounds: JEZ_CTX, minZoom: 8 }).addTo(map),
+  "Jezero · HiRISE 25 cm": trek("JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd", "png", 17, { bounds: JEZ_HIRISE, minZoom: 10 }).addTo(map),
+  "Gale · CTX 6 m": trek("Gale_CTX_BlockAdj_dd", "png", 12, { bounds: GALE_CTX, minZoom: 8 }).addTo(map),
+  "Gale · HiRISE 25 cm": trek("curiosity_hirise_mosaic", "png", 16, { bounds: GALE_HIRISE, minZoom: 10 }).addTo(map),
 };
 
 const graticule = L.layerGroup();
@@ -51,21 +53,98 @@ for (let lon = -150; lon <= 180; lon += 30)
 const sitesLayer = L.layerGroup().addTo(map);
 const routeLayer = L.layerGroup().addTo(map);
 const demLayer = L.layerGroup().addTo(map);
-const layersControl = L.control.layers(baseLayers, { ...hiresLayers, "Sites": sitesLayer, "High-res terrain area": demLayer, "Lat/Lon grid": graticule, "Route": routeLayer },
-  { position: "topleft" }).addTo(map);
+// ---------- map layers: one tidy panel, grouped ----------
+// Base map (pick one), science data, close-up imagery, things on the map. Other scripts add theirs
+// with layersControl.addBaseLayer / addOverlay(layer, name, { group, note, legend }).
+const LP_GROUPS = ["Base map", "Science data", "Close-up imagery", "On the map"];
+const LP_Z = { "Base map": 1, "Close-up imagery": 5, "Science data": 8 }; // draw order of tile layers
+const LayerPanel = L.Control.extend({
+  options: { position: "topright" },
+  initialize(o) { L.setOptions(this, o); this.items = []; this._q = 0; },
+  onAdd(m) {
+    const box = L.DomUtil.create("div", "lp");
+    box.innerHTML = `<button type="button" class="map-btn lp-toggle" aria-expanded="false" title="Choose what the map shows">🗂 Layers</button>
+      <div class="lp-panel" hidden><div class="lp-head"><b>Map layers</b><button type="button" class="lp-x" aria-label="Close layers">✕</button></div><div class="lp-body"></div></div>`;
+    L.DomEvent.disableClickPropagation(box);
+    L.DomEvent.disableScrollPropagation(box);
+    this.box = box; this.panel = box.querySelector(".lp-panel");
+    box.querySelector(".lp-toggle").onclick = () => this.toggle();
+    box.querySelector(".lp-x").onclick = () => this.toggle(false);
+    document.addEventListener("pointerdown", (e) => { if (!this.panel.hidden && !box.contains(e.target)) this.toggle(false); });
+    m.on("layeradd layerremove", () => { cancelAnimationFrame(this._q); this._q = requestAnimationFrame(() => this.sync()); });
+    this.render();
+    return box;
+  },
+  toggle(on = this.panel.hidden) {
+    this.panel.hidden = !on;
+    this.box.querySelector(".lp-toggle").setAttribute("aria-expanded", String(on));
+    if (on) this.sync();
+  },
+  add(layer, name, base, o = {}) {
+    const group = o.group || (base ? "Base map" : "On the map");
+    if (layer instanceof L.TileLayer && LP_Z[group]) layer.setZIndex(LP_Z[group]);
+    this.items.push({ layer, name, base, group, note: o.note || "", legend: o.legend || null });
+    if (this.box) this.render();
+    return this;
+  },
+  addBaseLayer(layer, name, o) { return this.add(layer, name, true, o); },
+  addOverlay(layer, name, o) { return this.add(layer, name, false, o); },
+  render() {
+    const body = this.box.querySelector(".lp-body");
+    body.innerHTML = LP_GROUPS.map((g) => {
+      const rows = this.items.map((it, i) => [it, i]).filter(([it]) => it.group === g);
+      if (!rows.length) return "";
+      return `<div class="lp-group"><div class="lp-gname">${g}</div>${rows.map(([it, i]) => `
+        <label class="lp-row"><input type="${it.base ? "radio" : "checkbox"}" name="${it.base ? "lp-base" : `lp-${i}`}" data-i="${i}">
+          <span><b>${it.name}</b>${it.note ? `<small>${it.note}</small>` : ""}</span></label>
+        ${it.legend ? `<div class="lp-legend" data-i="${i}" hidden></div>` : ""}`).join("")}</div>`;
+    }).join("");
+    body.querySelectorAll("input").forEach((inp) => (inp.onchange = () => this.choose(+inp.dataset.i, inp.checked)));
+    this.sync();
+  },
+  choose(i, on) {
+    const it = this.items[i];
+    if (it.base) {
+      for (const b of this.items) if (b.base && b !== it && map.hasLayer(b.layer)) map.removeLayer(b.layer);
+      map.addLayer(it.layer);
+      map.fire("baselayerchange", { layer: it.layer, name: it.name });
+    } else if (on) { map.addLayer(it.layer); map.fire("overlayadd", { layer: it.layer, name: it.name }); }
+    else { map.removeLayer(it.layer); map.fire("overlayremove", { layer: it.layer, name: it.name }); }
+  },
+  sync() {
+    if (!this.box) return;
+    this.items.forEach((it, i) => {
+      const inp = this.box.querySelector(`input[data-i="${i}"]`), on = map.hasLayer(it.layer);
+      if (inp) inp.checked = on;
+      const lg = this.box.querySelector(`.lp-legend[data-i="${i}"]`);
+      if (lg) { lg.hidden = !on; if (on) lg.innerHTML = typeof it.legend === "function" ? it.legend() : it.legend; }
+    });
+  },
+});
+const layersControl = new LayerPanel().addTo(map);
+for (const [name, l] of Object.entries(baseLayers)) layersControl.addBaseLayer(l, name, { note: BASE_NOTES[name] });
+for (const [name, l] of Object.entries(hiresLayers)) layersControl.addOverlay(l, name, { group: "Close-up imagery", note: "MRO · shows up when you zoom in there" });
+layersControl.addOverlay(sitesLayer, "Landing & candidate sites")
+  .addOverlay(routeLayer, "Your route")
+  .addOverlay(demLayer, "High-res terrain areas", { note: "where slopes come from 20 m terrain" })
+  .addOverlay(graticule, "Lat/lon grid");
 L.control.scale({ imperial: false }).addTo(map); // note: scale assumes Earth radius — see README
+// the cursor's coordinates and elevation, stacked with the scale so nothing overlaps
+const Readout = L.Control.extend({ options: { position: "bottomleft" }, onAdd() { return $("readout"); } });
+new Readout().addTo(map);
 
 // open this view of the map on the 3D globe
 const Globe3DControl = L.Control.extend({
+  options: { position: "topright" },
   onAdd() {
-    const b = L.DomUtil.create("button", "globe-btn");
-    b.type = "button"; b.textContent = "🌐 3D"; b.title = "See this view on the 3D globe";
+    const b = L.DomUtil.create("button", "map-btn globe-btn");
+    b.type = "button"; b.textContent = "🌐 3D view"; b.title = "See this view on the 3D globe";
     L.DomEvent.disableClickPropagation(b);
     b.onclick = () => Globe.fromMap();
     return b;
   },
 });
-new Globe3DControl({ position: "topleft" }).addTo(map);
+new Globe3DControl().addTo(map);
 
 // ---------- high-res terrain coverage ----------
 fetch("/api/dem").then((r) => r.json()).then((dems) => {
@@ -404,12 +483,12 @@ function renderPanel(p, labels) {
       <div class="res-foot">Effort ≈ ${Math.round(tl.avgW)} W average, ${Math.round(tl.peakW)} W peak · pace: ${Suit.state.condition} · carrying ${Suit.state.loadKg} kg</div>
     </div>
     <div class="verdict ${cls}">${verdict}</div>
-    <div class="row go-row">
-      <button id="nav-start" class="go">▶ Start Marswalk — live guidance</button>
-      <button id="walk-3d" class="go alt" title="Fly along the route in 3D">⛰ Walk it in 3D</button>
-      <button id="print-model" class="go alt" title="Make a 3D-printable relief model of this walk, with the route raised">🖨 Print model</button>
-      <button id="cuff" class="go alt" title="A printable Apollo-style cuff checklist and traverse map for the crew">📋 Cuff checklist</button>
-      <button id="hud-preview" class="go alt" title="Start live guidance in the helmet-visor display">🪖 Visor HUD</button>
+    <button id="nav-start" class="go">▶ Start Marswalk — live guidance</button>
+    <div class="tools">
+      <button id="hud-preview" class="tool" type="button" title="Start live guidance in the helmet-visor display"><span>🪖</span>Visor HUD</button>
+      <button id="walk-3d" class="tool" type="button" title="Fly along the route in 3D"><span>⛰</span>Walk in 3D</button>
+      <button id="cuff" class="tool" type="button" title="A printable Apollo-style cuff checklist and traverse map for the crew"><span>📋</span>Checklist</button>
+      <button id="print-model" class="tool" type="button" title="Make a 3D-printable relief model of this walk, with the route raised"><span>🖨</span>3D print</button>
     </div>
     ${sci ? sci.html : ""}
     <div id="along"></div>`;

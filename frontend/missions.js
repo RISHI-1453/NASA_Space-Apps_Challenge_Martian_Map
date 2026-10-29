@@ -103,11 +103,14 @@ const Missions = (() => {
         <div class="mi-site">${m.site}</div>
         <h3>${m.title}</h3>
         <div class="mi-goal">🎯 ${m.goal}</div>
-        <p>${m.why}${Science.cite(...m.cites)}</p>
-        <p class="mi-human"><b>Why send people:</b> ${m.human}</p>
-        <ol class="mi-stops">${m.stops.map((s) => `<li><b>${s.name}</b> · ${s.min} min — ${s.task}</li>`).join("")}</ol>
-        ${m.note ? `<p class="muted small">${m.note}</p>` : ""}
-        <div class="mi-meta">${m.round ? "Round trip" : "One way"} · ${m.stops.length} stations · ${m.stops.reduce((a, s) => a + s.min, 0)} min of work · carrying ${m.load} kg${m.rover !== "none" ? ` · ${m.rover === "lrv" ? "open rover" : "pressurised rover"} support` : ""}</div>
+        <div class="mi-meta">${m.round ? "Round trip" : "One way"} · ${m.stops.length} stations · ${m.stops.reduce((a, s) => a + s.min, 0)} min of work${m.rover !== "none" ? ` · ${m.rover === "lrv" ? "open rover" : "pressurised rover"}` : ""}</div>
+        <details class="mi-more">
+          <summary>About this EVA</summary>
+          <p>${m.why}${Science.cite(...m.cites)}</p>
+          <p class="mi-human"><b>Why send people:</b> ${m.human}</p>
+          <ol class="mi-stops">${m.stops.map((s) => `<li><b>${s.name}</b> · ${s.min} min — ${s.task}</li>`).join("")}</ol>
+          ${m.note ? `<p class="muted small">${m.note}</p>` : ""}
+        </details>
         <button type="button" class="go mi-plan" data-i="${i}">▶ Plan this EVA</button>
       </article>`).join("");
     el.querySelectorAll(".mi-plan").forEach((b) => (b.onclick = () => plan(LIST[+b.dataset.i])));
