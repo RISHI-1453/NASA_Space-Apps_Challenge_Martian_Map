@@ -479,7 +479,8 @@ details.sci.fold[open] { padding-bottom: 10px; }
 #along { margin-top: 8px; }
 
 /* ---------- helmet-visor HUD: full screen, laid out on a grid so nothing overlaps ---------- */
-body.visor-on header, body.visor-on #panel, body.visor-on .leaflet-control-container,
+/* only the app's own top bar: the ground view and 3D view keep their headers (title, tabs, close) */
+body.visor-on > header, body.visor-on #panel, body.visor-on .leaflet-control-container,
 body.visor-on .nav-top, body.visor-on .nav-bottom, body.visor-on .nav-alert, body.visor-on .nav-ctrl { display: none !important; }
 body.visor-on main { grid-template-columns: 1fr !important; grid-template-rows: 1fr !important; height: 100vh !important; }
 body.visor-on #map { height: 100vh; }
@@ -601,3 +602,9 @@ body.navigating .leaflet-control-zoom { margin-top: 0; }
 @media (hover: none) { .readout { display: none !important; } }
 .leaflet-control-attribution { max-width: 55vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .leaflet-control-attribution:hover { white-space: normal; max-width: 80vw; }
+/* phones: the ground-view / 3D-view header wraps (title on its own line) instead of running off the screen */
+@media (max-width: 640px) {
+  .gv-head { flex-wrap: wrap; gap: 8px; padding: 8px 10px; }
+  .gv-name { flex-basis: 100%; }
+  .gl-tools { justify-content: flex-start; }
+}
