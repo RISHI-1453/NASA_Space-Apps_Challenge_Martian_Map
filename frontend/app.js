@@ -37,11 +37,18 @@ const JEZ_HIRISE = [[18.3068, 77.2229], [18.6693, 77.5840]];
 // and in Gale crater, along Curiosity's whole traverse up Mount Sharp
 const GALE_CTX = [[-6.5733, 135.1843], [-2.8078, 139.2413]];
 const GALE_HIRISE = [[-4.9255, 137.1225], [-4.2490, 137.7298]];
+const COLOUR_V = 2; // bump when the colouring changes, so browsers drop their cached copies
+// CTX and HiRISE are greyscale cameras; these come through our server coloured with the Viking
+// colour of the same ground (backend/imagery.py), so close up Mars still looks like Mars
+const coloured = (layer, maxNativeZoom, extra = {}) => L.tileLayer(`/api/imagery/${layer}_c/{z}/{y}/{x}?v=${COLOUR_V}`, {
+  tileSize: 256, maxNativeZoom, maxZoom: 18, noWrap: true, attribution: "NASA/JPL-Caltech/MSSS/UArizona · Mars Trek", ...extra });
 const hiresLayers = {
-  "Jezero · CTX 6 m": trek("JEZ_ctx_B_soc_008_orthoMosaic_6m_Eqc_latTs0_lon0", "png", 13, { bounds: JEZ_CTX, minZoom: 8 }).addTo(map),
-  "Jezero · HiRISE 25 cm": trek("JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd", "png", 17, { bounds: JEZ_HIRISE, minZoom: 10 }).addTo(map),
-  "Gale · CTX 6 m": trek("Gale_CTX_BlockAdj_dd", "png", 12, { bounds: GALE_CTX, minZoom: 8 }).addTo(map),
-  "Gale · HiRISE 25 cm": trek("curiosity_hirise_mosaic", "png", 16, { bounds: GALE_HIRISE, minZoom: 10 }).addTo(map),
+  "Everywhere · CTX 5 m": L.tileLayer(`/api/imagery/ctx_c/{z}/{y}/{x}?v=${COLOUR_V}`, { tileSize: 512, zoomOffset: -1, minZoom: 9, maxNativeZoom: 13, maxZoom: 18, noWrap: true,
+    attribution: "CTX mosaic: Caltech Murray Lab / Esri" }).addTo(map),
+  "Jezero · CTX 6 m": coloured("jez_ctx", 13, { bounds: JEZ_CTX, minZoom: 8 }).addTo(map),
+  "Jezero · HiRISE 25 cm": coloured("jez_hirise", 17, { bounds: JEZ_HIRISE, minZoom: 10 }).addTo(map),
+  "Gale · HiRISE 25 cm": coloured("gale_hirise", 16, { bounds: GALE_HIRISE, minZoom: 10 }).addTo(map),
+  "Gale · CTX 6 m (greyscale)": trek("Gale_CTX_BlockAdj_dd", "png", 12, { bounds: GALE_CTX, minZoom: 8 }),
 };
 
 const graticule = L.layerGroup();
@@ -123,7 +130,8 @@ const LayerPanel = L.Control.extend({
 });
 const layersControl = new LayerPanel().addTo(map);
 for (const [name, l] of Object.entries(baseLayers)) layersControl.addBaseLayer(l, name, { note: BASE_NOTES[name] });
-for (const [name, l] of Object.entries(hiresLayers)) layersControl.addOverlay(l, name, { group: "Close-up imagery", note: "MRO · shows up when you zoom in there" });
+for (const [name, l] of Object.entries(hiresLayers)) layersControl.addOverlay(l, name, { group: "Close-up imagery",
+  note: name.startsWith("Everywhere") ? "MRO · the whole planet, in Mars' colour, from zoom 9" : name.includes("greyscale") ? "MRO · original black-and-white" : "MRO · in Mars' colour, when you zoom in there" });
 layersControl.addOverlay(sitesLayer, "Landing & candidate sites")
   .addOverlay(routeLayer, "Your route")
   .addOverlay(demLayer, "High-res terrain areas", { note: "where slopes come from 20 m terrain" })

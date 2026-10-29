@@ -43,11 +43,14 @@ def landmarks():
 
 @app.get("/api/imagery/{layer}/{z}/{y}/{x}")
 def imagery_tile(layer: str, z: int, y: int, x: int):
-    """The sharpest imagery layers for the 3D globe, re-encoded as small WebP tiles."""
-    if layer not in imagery.LAYERS or not (0 <= z <= imagery.MAX_Z[layer] and 0 <= x < 2 ** (z + 1) and 0 <= y < 2 ** z):
+    """The sharpest imagery layers, re-encoded as small WebP tiles. A "_c" suffix (e.g. ctx_c) gives the
+    greyscale layer in Mars' colour, taken from the Viking colour mosaic of the same ground."""
+    coloured = layer.endswith("_c")
+    base = layer[:-2] if coloured else layer
+    if base not in imagery.LAYERS or not (0 <= z <= imagery.MAX_Z[base] and 0 <= x < 2 ** (z + 1) and 0 <= y < 2 ** z):
         raise HTTPException(404, "no such tile")
     try:
-        data = imagery.tile(layer, z, x, y)
+        data = (imagery.colour if coloured else imagery.tile)(base, z, x, y)
     except imagery.Missing:
         raise HTTPException(404, "outside this layer's coverage")
     except Exception as e:

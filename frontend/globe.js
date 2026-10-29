@@ -57,9 +57,9 @@ const Globe = (() => {
           <button type="button" data-act="here" title="Back to the place this view opened on">📍 Here</button>
           <button type="button" data-act="print" title="Make a 3D-printable relief model of this area">🖨 Print model</button>
           <select class="gl-imagery" aria-label="Imagery">
-            <option value="colour">Colour + CTX 5 m detail</option>
-            <option value="ctx">CTX 5 m (sharpest, greyscale)</option>
-            <option value="viking">Viking colour</option>
+            <option value="colour">Mars colour, sharpest detail</option>
+            <option value="ctx">Greyscale detail (original CTX / HiRISE)</option>
+            <option value="viking">Viking colour only</option>
             <option value="mola">MOLA elevation colours</option>
           </select>
           <span class="gl-exag" role="group" aria-label="Relief exaggeration"><button type="button" data-exag="1">Relief ×1</button><button type="button" data-exag="2">×2</button><button type="button" data-exag="3">×3</button></span>
@@ -241,16 +241,20 @@ const Globe = (() => {
   function imageryProviders(tiling) {
     const trek = (layer, ext, maximumLevel) => new C.UrlTemplateImageryProvider({
       url: `https://trek.nasa.gov/tiles/Mars/EQ/${layer}/1.0.0/default/default028mm/{z}/{y}/{x}.${ext}`, tilingScheme: tiling, maximumLevel });
-    // the heavy greyscale layers come through our server as WebP (~5x smaller than the PNG originals)
-    const ours = (layer, maximumLevel, extra = {}) => new C.UrlTemplateImageryProvider({ url: `/api/imagery/${layer}/{z}/{y}/{x}`, tilingScheme: tiling, maximumLevel, ...extra });
+    // the heavy greyscale layers come through our server as WebP (~5x smaller than the PNG originals);
+    // their "_c" versions are coloured on the server with the Viking colour of the same ground
+    const ours = (layer, maximumLevel, extra = {}) => new C.UrlTemplateImageryProvider({ url: `/api/imagery/${layer}/{z}/{y}/{x}${layer.endsWith("_c") ? `?v=${COLOUR_V}` : ""}`, tilingScheme: tiling, maximumLevel, ...extra });
     const box = (b) => C.Rectangle.fromDegrees(b[0][1], b[0][0], b[1][1], b[1][0]);
+    const sharp = (c) => ({
+      ctx: ours(`ctx${c}`, 12, { tileWidth: 512, tileHeight: 512 }),
+      jezCtx: ours(`jez_ctx${c}`, 13, { rectangle: box(JEZ_CTX) }),
+      jezHirise: ours(`jez_hirise${c}`, 17, { rectangle: box(JEZ_HIRISE) }),
+      galeHirise: ours(`gale_hirise${c}`, 16, { rectangle: box(GALE_HIRISE) }),
+    });
     providers = {
       viking: trek("Mars_Viking_MDIM21_ClrMosaic_global_232m", "jpg", 7),
       mola: trek("Mars_MGS_MOLA_ClrShade_merge_global_463m", "jpg", 6),
-      ctx: ours("ctx", 12, { tileWidth: 512, tileHeight: 512 }),
-      jezCtx: ours("jez_ctx", 13, { rectangle: box(JEZ_CTX) }),
-      jezHirise: ours("jez_hirise", 17, { rectangle: box(JEZ_HIRISE) }),
-      galeHirise: ours("gale_hirise", 16, { rectangle: box(GALE_HIRISE) }),
+      grey: sharp(""), colour: sharp("_c"),
     };
   }
   function setImagery(m) {
@@ -261,11 +265,12 @@ const Globe = (() => {
     else if (m === "mola") add(providers.mola);
     else {
       add(providers.viking);
-      // the 5 m detail only once you're close; colour mode keeps some Viking colour under it
-      add(providers.ctx, m === "ctx" ? { minimumTerrainLevel: 6 } : { alpha: 0.72, minimumTerrainLevel: 8 });
-      add(providers.jezCtx, { minimumTerrainLevel: 9 });
-      add(providers.jezHirise, { minimumTerrainLevel: 11 });
-      add(providers.galeHirise, { minimumTerrainLevel: 11 });
+      // the 5 m detail once you're close, in Mars' colour (or the original greyscale)
+      const s = m === "ctx" ? providers.grey : providers.colour;
+      add(s.ctx, { minimumTerrainLevel: m === "ctx" ? 6 : 7 });
+      add(s.jezCtx, { minimumTerrainLevel: 9 });
+      add(s.jezHirise, { minimumTerrainLevel: 11 });
+      add(s.galeHirise, { minimumTerrainLevel: 11 });
     }
     root.querySelector(".gl-imagery").value = m;
   }

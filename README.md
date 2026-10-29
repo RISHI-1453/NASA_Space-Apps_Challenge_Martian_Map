@@ -153,7 +153,13 @@ The route summary shows the share of each supply the walk uses and names the **l
   - The HRSC/MOLA 200 m blend from zoom level 8.
   - The 20 m CTX DTM in Jezero from level 9.
   - **Relief ×1/×2/×3** exaggerates heights.
-- **Imagery:** the Viking colour mosaic, sharpened close up by the **global 5 m CTX mosaic** (Caltech Murray Lab, via Esri), plus HiRISE 25 cm and CTX 6 m in Jezero. You can switch to CTX only, Viking or MOLA elevation colours. The three heavy layers come through `/api/imagery/…` (`backend/imagery.py`), which re-encodes each PNG tile as WebP once and caches it: about 8 KB per tile instead of 60–95 KB.
+- **Imagery:** the Viking colour mosaic, sharpened close up by the **global 5 m CTX mosaic** (Caltech Murray Lab, via Esri), plus HiRISE 25 cm in Jezero and Gale and CTX 6 m in Jezero.
+  - **In Mars' colour (default):** CTX and HiRISE are black-and-white cameras, so `backend/imagery.py` colours each tile.
+    - The detail comes from the sharp greyscale tile; the colour is Martian dust's butterscotch, stronger or weaker by how red the Viking colour mosaic is at that spot. So dusty plains come out butterscotch and dark basaltic sand a duller brown.
+    - Each local mosaic's brightness is matched to the global CTX first, so the HiRISE footprints don't show as dark rectangles.
+    - The same coloured tiles are used for the close-ups on the 2D map.
+  - **Other choices:** the original greyscale, Viking colour only, or MOLA elevation colours.
+  - **Small tiles:** the heavy layers come through `/api/imagery/…` (add `_c` for colour), re-encoded once as WebP and cached: about 8 KB per tile instead of 60–95 KB.
 - **On the globe:**
   - Your route, draped on the terrain and coloured by slope, with its A/B/C pins.
   - The dashed 10 km walk-home ring and the ⟲ point of no return.
