@@ -7,3 +7,5 @@ data/*.part
 data/rover/
 data/esri_dem/
 data/imagery/
+scripts/tour/frames/
+scripts/tour/profile/

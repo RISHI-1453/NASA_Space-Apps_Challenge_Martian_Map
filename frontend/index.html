@@ -23,6 +23,7 @@
     <div class="brand">MARTIAN <span>MAP</span></div>
     <div class="header-right">
       <div id="clock" class="clock"></div>
+      <button id="open-tour" class="intro-replay" type="button" title="A 4-minute video walkthrough of every feature">▶ Tour</button>
       <button id="replay-intro" class="intro-replay" type="button">Watch intro</button>
     </div>
   </header>
@@ -206,6 +207,7 @@
   <script defer src="printmodel.js"></script>
   <script defer src="landmarks.js"></script>
   <script defer src="navigate.js"></script>
+  <script defer src="tour.js"></script>
   <script type="module">
     import { playIntro } from "./intro.js";
     // where the whole planet sits on screen, so the intro's unrolled globe lands exactly on it
@@ -221,6 +223,7 @@
         onDone: () => {
           map.invalidateSize();
           if (me) map.flyTo(me, 11, { duration: 2.4 }); // a saved position: carry on down to it
+          setTimeout(() => Tour.offer(), 900); // then the guided-tour video (closable, can be turned off)
         },
       });
     }

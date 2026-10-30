@@ -23,7 +23,18 @@ import terrain
 ROOT = Path(__file__).resolve().parent.parent
 log = logging.getLogger("uvicorn.error")
 app = FastAPI(title="Martian Map")
-app.add_middleware(GZipMiddleware, minimum_size=800)  # the JS, CSS, JSON and terrain tiles shrink 3-4x
+class Gzip(GZipMiddleware):
+    """Gzip for text and tiles, but never the tour video: it's already compressed, and the browser's
+    range requests (seeking) must reach the file untouched."""
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["path"].startswith("/media/"):
+            await self.app(scope, receive, send)
+        else:
+            await super().__call__(scope, receive, send)
+
+
+app.add_middleware(Gzip, minimum_size=800)  # the JS, CSS, JSON and terrain tiles shrink 3-4x
 LONG_CACHE = "public, max-age=2592000, immutable"     # tiles never change: browsers keep them 30 days
 
 

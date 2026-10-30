@@ -608,3 +608,19 @@ body.navigating .leaflet-control-zoom { margin-top: 0; }
   .gv-name { flex-basis: 100%; }
   .gl-tools { justify-content: flex-start; }
 }
+
+/* ---------- guided-tour video pop-up ---------- */
+.tour-back { position: fixed; inset: 0; z-index: 7000; display: grid; place-items: center; padding: 16px;
+  background: rgba(5,3,2,.72); backdrop-filter: blur(3px); animation: tourIn .35s ease-out; }
+@keyframes tourIn { from { opacity: 0; } }
+.tour-card { width: min(1120px, 100%); max-height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 12px; box-shadow: 0 24px 70px rgba(0,0,0,.7); }
+.tour-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.tour-head b { font-size: 17px; }
+.tour-k { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 2px; }
+.tour-x { background: none; border: 1px solid var(--line); border-radius: 8px; font-size: 16px; line-height: 1; padding: 7px 10px; }
+.tour-x:hover { border-color: var(--accent); }
+.tour-video { width: 100%; max-height: calc(100vh - 150px); aspect-ratio: 16 / 9; background: #000; border-radius: 8px; display: block; }
+.tour-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.tour-foot label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.tour-skip { font-size: 13px; }

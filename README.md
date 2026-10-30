@@ -42,6 +42,13 @@ python -m venv .venv
 .venv\Scripts\python scripts\fetch_data.py
 ```
 
+## Guided tour video
+
+A walkthrough of every feature, about 4 minutes long, with captions in the video itself: `frontend/media/martian-map-tour.mp4`, 1080p H.264.
+- **When it shows:** it pops up when the intro finishes. Close it with ✕, *Skip — go to the map*, Esc or a click outside, and tick *Don't show this after the intro again* to stop it appearing. The **▶ Tour** button in the header opens it any time (`frontend/tour.js`).
+- **How it's made:** `scripts/tour/record.py` drives the real app in headless Chrome (Playwright, using the GPU so the 3D view is smooth). It draws the captions, a highlight ring and a visible cursor on the page, records the screen through Chrome's screencast, cuts out loading waits, and encodes with ffmpeg.
+- **To re-record after the app changes:** start the server, then from `scripts/tour/` run `python record.py warm` (fills the caches) and `python record.py record`. You need `pip install playwright imageio-ffmpeg` and Chrome installed.
+
 ## Intro (for presenting)
 
 The intro plays every time the app opens. A title screen ("Code Huzzlers presents Martian Map") shows for about 3 seconds, then a ~38-second 3D journey starts by itself with its own soundtrack. Press **Begin** to start it straight away:
@@ -279,10 +286,13 @@ frontend/missions.js    the science EVAs (Missions tab): goals, stations, tasks,
 frontend/datalayers.js  science layers + legend, "What orbiters found here", "Science along the way"
 frontend/spaceweather.js  space weather seen from Mars: facing/connected regions, Mars-bound CMEs, go/no-go
 frontend/checklist.js   the printable Apollo-style cuff checklist with a shaded-relief traverse map
+frontend/tour.js        the guided-tour video pop-up (after the intro, and the ▶ Tour button)
+frontend/media/         the tour video (martian-map-tour.mp4) and its poster
 data/                sites.json, landmarks.json (OrbitStudio), mars_features.json; MOLA grid + Jezero DTM and the
                      tile caches (downloaded, git-ignored)
 scripts/fetch_data.py      downloads the elevation data (MOLA, Jezero CTX DTM, Gale HiRISE DTM)
 scripts/build_science_layers.py  rebuilds data/science_features.json from Mars Trek's feature services
+scripts/tour/              records the guided-tour video (record.py drives the app, overlay.js draws the captions)
 scripts/build_features.py  rebuilds data/mars_features.json from the USGS gazetteer
 scripts/build_textures.py  rebuilds the intro's Earth/Mars globe textures (needs Pillow)
 ```
