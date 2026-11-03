@@ -4,6 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Martian Map · Code Huzzlers</title>
+  <meta name="description" content="Plan a Marswalk on real NASA data: explore Mars in 3D, pick a science EVA, check suits, slopes, sunlight, radiation and space weather, and follow the route with live guidance or a helmet-visor HUD.">
+  <meta name="theme-color" content="#0d0b0a">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <!-- the card social sites show when the link is shared -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Martian Map">
+  <meta property="og:title" content="Martian Map: plan a walk on Mars with real NASA data">
+  <meta property="og:description" content="Explore Mars in 3D, pick a science EVA, and check every step for suits, slopes, sunlight, radiation and space weather. NASA Space Apps Challenge 2026.">
+  <meta property="og:url" content="https://martian-map-production.up.railway.app/">
+  <meta property="og:image" content="https://martian-map-production.up.railway.app/media/og-image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
   <!-- open connections early; nothing below blocks the first paint except the two small stylesheets -->
   <link rel="preconnect" href="https://cdnjs.cloudflare.com">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
@@ -22,7 +35,7 @@
   <header>
     <div class="brand">MARTIAN <span>MAP</span></div>
     <div class="header-right">
-      <div id="clock" class="clock"></div>
+      <div id="clock" class="clock" title="Mars time right now. Mars Sol Date: sols (Mars days) counted since 1873. MTC: Coordinated Mars Time, the clock at Mars' prime meridian. Ls: the season (0° is northern spring, 90° summer, 180° autumn, 270° winter). MY: Mars Year."></div>
       <button id="open-tour" class="intro-replay" type="button" title="A 4-minute video walkthrough of every feature">▶ Tour</button>
       <button id="replay-intro" class="intro-replay" type="button">Watch intro</button>
     </div>
@@ -42,9 +55,9 @@
       </nav>
       <section data-tab="missions">
         <h2>Science EVAs</h2>
-        <p class="muted small mi-intro">Ready-made Marswalks at places NASA's rovers and orbiters have studied closely. Each has a science
-          goal, stations with tasks and the kit to carry, and the data layers that matter. <b>▶ Plan this EVA</b> loads it into the
-          planner, where every check (suits, slopes, sunlight, radiation, space weather) runs on it.</p>
+        <p class="muted small mi-intro">Ready-made Marswalks where NASA's rovers and orbiters have looked closely. Each has a
+          science goal, stations with tasks and kit, and the data layers that matter. <b>Plan this EVA</b> loads one into the
+          planner and checks suits, slopes, sunlight, radiation and space weather.</p>
         <div id="missions"></div>
       </section>
 
@@ -157,6 +170,7 @@
             coordinates (e.g. <i>-4.6, 137.4</i>) or a point on the map.</li>
           <li>Or click <b>✚ Draw on map</b> and click stops <b>A</b>, <b>B</b>, <b>C</b>… in walking order.</li>
           <li>Drag any pin to adjust. Right-click the map for a dropped pin.</li>
+          <li>Or start from a ready-made science EVA in <a href="#" data-goto="missions">Missions</a>.</li>
         </ol>
 
         <div id="summary" class="summary" hidden></div>

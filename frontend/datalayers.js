@@ -12,7 +12,7 @@ const DataLayers = (() => {
   const inertia = trek("TES_Thermal_Inertia", "png", 1, { opacity: 0.6 });
   const dust = trek("tes_ruffdust", "png", 2, { opacity: 0.6 });
   const geology = L.tileLayer("https://trek.nasa.gov/mars/trekarcgis/rest/services/SIM3292_Global_Geology/MapServer/WMTS/tile/1.0.0/SIM3292_Global_Geology/default/default028mm/{z}/{y}/{x}.png",
-    { tileSize: 256, maxNativeZoom: 11, maxZoom: 18, noWrap: true, opacity: 0.55, attribution: "USGS SIM 3292 (Tanaka et al. 2014) · Mars Trek" });
+    { tileSize: 256, maxNativeZoom: 11, maxZoom: 18, noWrap: true, bounds: WORLD, opacity: 0.55, attribution: "USGS SIM 3292 (Tanaka et al. 2014) · Mars Trek" });
   // ---------- points: minerals, salts, ice, active slopes ----------
   const minerals = L.layerGroup(), active = L.layerGroup();
   const renderer = L.canvas({ padding: 0.3 });

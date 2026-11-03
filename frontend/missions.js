@@ -49,7 +49,7 @@ const Missions = (() => {
       goal: "How much clean water ice lies under the northern plains — enough for a base?",
       why: "HiRISE watched new craters punch through the soil here and expose bright, clean water ice that faded over months as it turned to vapour. Radar from orbit suggests thick sheets of ice under Arcadia. A crew that can drill ice has water to drink, oxygen to breathe and fuel to fly home.",
       human: "Finding the bright patch, drilling it and running a radar line takes a crew a morning.",
-      cites: ["dundas2014", "bramson2015", "dundas2018"], layers: ["active", "inertia"], depart: "10:00", load: 22, round: true, rover: "lrv", drive: [0],
+      cites: ["dundas2014", "bramson2015", "dundas2018"], layers: ["active"], depart: "10:00", load: 22, round: true, rover: "lrv", drive: [0],
       note: "The crater's position is known to about ±0.5 km (HiRISE survey), so the first task is finding it. The crew drives the open rover out and back with the radar sled; the stations are on foot.",
       stops: [
         { lat: 46.15, lon: -171.47, name: "Habitat (example site)", min: 15, task: "Suit check; load the ground-penetrating radar sled on the rover.", kit: "GPR sled" },
@@ -82,13 +82,14 @@ const Missions = (() => {
 
   function plan(m) {
     if (typeof Nav !== "undefined" && Nav.active) Nav.stop();
+    // the suit first: its change re-renders whatever route is on screen, so do that before replacing it
+    Suit.set({ loadKg: m.load, rover: m.rover, crew: 2 });
     waypoints = m.stops.map((s) => [s.lat, s.lon]);
     wpNames = m.stops.map((s) => s.name);
     m.stops.forEach((s) => stopWork.set(llKey([s.lat, s.lon]), s.min));
     for (const i of m.drive || []) driveLegs.add(legKey(waypoints[i], waypoints[i + 1]));
     $("roundtrip").checked = m.round;
     $("depart").value = m.depart;
-    Suit.set({ loadKg: m.load, rover: m.rover, crew: 2 });
     if (m.layers.length) DataLayers.show(m.layers);
     showTab("route");
     redrawRoute();
@@ -99,21 +100,28 @@ const Missions = (() => {
     const el = document.getElementById("missions");
     if (!el) return;
     el.innerHTML = LIST.map((m, i) => `
-      <article class="mission">
+      <article class="mission" aria-labelledby="mi-t-${i}">
         <div class="mi-site">${m.site}</div>
-        <h3>${m.title}</h3>
-        <div class="mi-goal">🎯 ${m.goal}</div>
-        <div class="mi-meta">${m.round ? "Round trip" : "One way"} · ${m.stops.length} stations · ${m.stops.reduce((a, s) => a + s.min, 0)} min of work${m.rover !== "none" ? ` · ${m.rover === "lrv" ? "open rover" : "pressurised rover"}` : ""}</div>
-        <details class="mi-more">
-          <summary>About this EVA</summary>
+        <h3 id="mi-t-${i}">${m.title}</h3>
+        <div class="mi-goal">${m.goal}</div>
+        <div class="mi-meta">${m.round ? "Round trip" : "One way"} · ${m.stops.length} stations · ${fmtDur(m.stops.reduce((a, s) => a + s.min, 0) / 60)} of science work${m.rover !== "none" ? ` · ${m.rover === "lrv" ? "open rover" : "pressurised rover"}` : ""}</div>
+        <div class="mi-foot">
+          <button type="button" class="mi-toggle" aria-expanded="false" aria-controls="mi-b-${i}">About this EVA</button>
+          <button type="button" class="mi-plan" data-i="${i}">Plan this EVA</button>
+        </div>
+        <div class="mi-body" id="mi-b-${i}" hidden>
           <p>${m.why}${Science.cite(...m.cites)}</p>
           <p class="mi-human"><b>Why send people:</b> ${m.human}</p>
           <ol class="mi-stops">${m.stops.map((s) => `<li><b>${s.name}</b> · ${s.min} min — ${s.task}</li>`).join("")}</ol>
           ${m.note ? `<p class="muted small">${m.note}</p>` : ""}
-        </details>
-        <button type="button" class="go mi-plan" data-i="${i}">▶ Plan this EVA</button>
+        </div>
       </article>`).join("");
     el.querySelectorAll(".mi-plan").forEach((b) => (b.onclick = () => plan(LIST[+b.dataset.i])));
+    el.querySelectorAll(".mi-toggle").forEach((b) => (b.onclick = () => {
+      const open = b.getAttribute("aria-expanded") !== "true";
+      b.setAttribute("aria-expanded", String(open));
+      document.getElementById(b.getAttribute("aria-controls")).hidden = !open;
+    }));
   }
   render();
   return { LIST, taskAt, plan };

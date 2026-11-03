@@ -7,20 +7,50 @@ function showTab(name) {
   document.querySelectorAll(".panel-tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
   try { localStorage.setItem("martianmap.tab", name); } catch {}
 }
-document.querySelectorAll(".panel-tabs button").forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
-showTab((() => { try { return localStorage.getItem("martianmap.tab") || "route"; } catch { return "route"; } })());
+const tabButtons = [...document.querySelectorAll(".panel-tabs button")];
+tabButtons.forEach((b, i) => {
+  b.onclick = () => showTab(b.dataset.tab);
+  b.onkeydown = (e) => { // arrow keys move between tabs, like any tab strip
+    const k = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+    if (!k) return;
+    const t = tabButtons[(i + k + tabButtons.length) % tabButtons.length];
+    showTab(t.dataset.tab); t.focus(); e.preventDefault();
+  };
+});
+document.addEventListener("click", (e) => { // in-text links to another tab
+  const a = e.target.closest("[data-goto]");
+  if (a) { e.preventDefault(); showTab(a.dataset.goto); }
+});
+// first visit: start on the ready-made science EVAs; after that, wherever the viewer left off
+showTab((() => { try { return localStorage.getItem("martianmap.tab") || "missions"; } catch { return "missions"; } })());
+// bring something in the panel into view. Wide screens scroll the panel itself; on phones the page
+// scrolls, under the map and tabs pinned at the top
+function reveal(el, gap = 8) {
+  const panel = $("panel"), tabs = panel.querySelector(".panel-tabs");
+  if (getComputedStyle(panel).overflowY !== "visible") {
+    const top = panel.scrollTop + el.getBoundingClientRect().top - panel.getBoundingClientRect().top - tabs.offsetHeight - gap;
+    panel.scrollTo({ top, behavior: "smooth" });
+  } else {
+    const top = scrollY + el.getBoundingClientRect().top - $("map").offsetHeight - tabs.offsetHeight - gap;
+    window.scrollTo({ top, behavior: "smooth" });
+  }
+}
 const TREK = "https://trek.nasa.gov/tiles/Mars/EQ";
+const WORLD = [[-90, -180], [90, 180]]; // tile layers stop here, so nothing asks for tiles beyond the poles
 const trek = (layer, ext, maxNativeZoom, extra = {}) =>
   L.tileLayer(`${TREK}/${layer}/1.0.0/default/default028mm/{z}/{y}/{x}.${ext}`, {
-    tileSize: 256, maxNativeZoom, maxZoom: 18, noWrap: true,
+    tileSize: 256, maxNativeZoom, maxZoom: 18, noWrap: true, bounds: WORLD,
     attribution: "NASA/JPL-Caltech · Mars Trek", ...extra,
   });
 
 // ---------- map ----------
 const map = L.map("map", {
   crs: L.CRS.EPSG4326, center: [0, 0], zoom: 1, minZoom: 1, maxZoom: 18, // whole planet; no preset site
-  maxBounds: [[-90, -180], [90, 180]], worldCopyJump: false,
+  maxBounds: WORLD, worldCopyJump: false,
 });
+map.getContainer().setAttribute("aria-label", "Map of Mars");
+// the map's box changes size (phone layout, live guidance, the visor): keep Leaflet in step
+new ResizeObserver(() => map.invalidateSize({ debounceMoveend: true })).observe(map.getContainer());
 
 // Global basemaps (pick one)
 const baseLayers = {
@@ -43,7 +73,7 @@ const COLOUR_V = 2; // bump when the colouring changes, so browsers drop their c
 const coloured = (layer, maxNativeZoom, extra = {}) => L.tileLayer(`/api/imagery/${layer}_c/{z}/{y}/{x}?v=${COLOUR_V}`, {
   tileSize: 256, maxNativeZoom, maxZoom: 18, noWrap: true, attribution: "NASA/JPL-Caltech/MSSS/UArizona · Mars Trek", ...extra });
 const hiresLayers = {
-  "Everywhere · CTX 5 m": L.tileLayer(`/api/imagery/ctx_c/{z}/{y}/{x}?v=${COLOUR_V}`, { tileSize: 512, zoomOffset: -1, minZoom: 9, maxNativeZoom: 13, maxZoom: 18, noWrap: true,
+  "Everywhere · CTX 5 m": L.tileLayer(`/api/imagery/ctx_c/{z}/{y}/{x}?v=${COLOUR_V}`, { tileSize: 512, zoomOffset: -1, minZoom: 9, maxNativeZoom: 13, maxZoom: 18, noWrap: true, bounds: WORLD,
     attribution: "CTX mosaic: Caltech Murray Lab / Esri" }).addTo(map),
   "Jezero · CTX 6 m": coloured("jez_ctx", 13, { bounds: JEZ_CTX, minZoom: 8 }).addTo(map),
   "Jezero · HiRISE 25 cm": coloured("jez_hirise", 17, { bounds: JEZ_HIRISE, minZoom: 10 }).addTo(map),
@@ -210,9 +240,10 @@ map.on("mousemove", (e) => {
   clearTimeout(readoutTimer);
   readoutTimer = setTimeout(async () => {
     const r = await fetch(`/api/elevation?lat=${lat}&lon=${lng}&quick=1`); // never wait on a download for a hover
-    if (r.ok) { const d = await r.json(); $("readout").textContent = `${lat.toFixed(4)}°, ${lng.toFixed(4)}°E · ${Math.round(d.elev_m)} m · ${d.source}`; }
+    if (r.ok && $("readout").textContent) { const d = await r.json(); $("readout").textContent = `${lat.toFixed(4)}°, ${lng.toFixed(4)}°E · ${Math.round(d.elev_m)} m · ${d.source}`; }
   }, 120);
 });
+map.on("mouseout", () => { clearTimeout(readoutTimer); $("readout").textContent = ""; }); // nothing stale left behind
 
 // ---------- route planner ----------
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -288,7 +319,7 @@ const updateBanner = () => { banner.textContent = `Click the map to place stop $
 function setDrawing(on) {
   drawing = on;
   $("draw").classList.toggle("active", on);
-  $("draw").textContent = on ? "✓ Done" : "✚ Add stops";
+  $("draw").textContent = on ? "✓ Done" : "✚ Draw on map";
   map.getContainer().style.cursor = on ? "crosshair" : "";
   banner.hidden = !on;
   updateBanner();
@@ -379,7 +410,7 @@ async function analyse() {
   drawProfile(p, labels);
   if (!Nav.active) {
     showTab("route");
-    requestAnimationFrame(() => $("summary").scrollIntoView({ block: "start", behavior: "smooth" }));
+    requestAnimationFrame(() => reveal($("summary")));
   }
   const end = waypoints[n - 1];
   updateConditions(end[0], end[1], `${letter(n - 1)}: ${stopName(n - 1)}`);
@@ -805,10 +836,10 @@ async function showPlace(lat, lon, title, meta, zoom) {
   const box = document.createElement("div");
   box.className = "place-pop";
   box.innerHTML = `<div class="pn">${title}</div><div class="pm">${meta || ""}${meta ? "<br>" : ""}${fmtLatLon(lat, lon)}<span class="pw"></span></div>`;
-  const btn = (label, fn) => { const b = document.createElement("button"); b.textContent = label; b.onclick = () => { map.closePopup(); fn(); }; box.appendChild(b); };
-  btn("📍 I'm here", () => { searchLayer.clearLayers(); setMe(lat, lon, { fly: false }); });
+  const btn = (label, fn) => { const b = document.createElement("button"); b.type = "button"; b.textContent = label; b.onclick = () => { map.closePopup(); fn(); }; box.appendChild(b); };
   const placeName = title === "Dropped pin" || title === "Coordinates" ? null : title;
   box.appendChild(Dir.actions([lat, lon], placeName, { close: () => { map.closePopup(); searchLayer.clearLayers(); } }));
+  btn("📍 I'm here", () => { searchLayer.clearLayers(); setMe(lat, lon, { fly: false }); });
   box.appendChild(GroundView.button(lat, lon, placeName || "Dropped pin"));
   box.appendChild(PrintModel.button(lat, lon, placeName || "Dropped pin", { spanKm: 10 }));
   pin.bindPopup(box, { className: "", maxWidth: 260 });
@@ -816,7 +847,10 @@ async function showPlace(lat, lon, title, meta, zoom) {
   pin.openPopup();
   const w = await whereis(lat, lon);
   const el = box.querySelector(".pw");
-  if (w && el) el.innerHTML = `<br>${w.summary}${w.elev_m !== undefined ? ` · ${Math.round(w.elev_m)} m` : ""}`;
+  if (w && el) {
+    el.innerHTML = `<br>${w.summary}${w.elev_m !== undefined ? ` · ${Math.round(w.elev_m)} m` : ""}`;
+    if (pin.isPopupOpen()) pin.getPopup().update(); // it grew: re-fit it, and pan so it stays on screen
+  }
 }
 map.on("contextmenu", (e) => showPlace(e.latlng.lat, e.latlng.lng, "Dropped pin", ""));
 
@@ -879,7 +913,7 @@ function updateConditions(lat, lon, label) {
 
 function renderConditions() {
   const t = MarsTime.compute();
-  $("clock").innerHTML = `Mars Sol Date <b>${t.msd.toFixed(2)}</b> · MTC <b>${MarsTime.hhmm(t.mtc)}</b> · Ls <b>${t.Ls.toFixed(1)}°</b> · MY <b>${t.marsYear}</b>`;
+  $("clock").innerHTML = `<span class="ck-long">Mars Sol Date <b>${t.msd.toFixed(2)}</b> · </span>MTC <b>${MarsTime.hhmm(t.mtc)}</b><span class="ck-long"> · Ls <b>${t.Ls.toFixed(1)}°</b> · MY <b>${t.marsYear}</b></span>`;
   if (!condTarget) return;
   const { lat, lon, label } = condTarget;
   const loc = MarsTime.local(t, lat, lon);

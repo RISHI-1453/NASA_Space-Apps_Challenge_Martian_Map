@@ -384,7 +384,7 @@ const Globe = (() => {
           ring.push(lo / D2R, la / D2R);
         }
         routeLines.push(groundLine(ring, "#ece6e1", 2, { alpha: 0.7, dash: true }));
-        const tb = $("roundtrip").checked ? null : Science.turnBack(p, Suit.timeline(p));
+        const tb = $("roundtrip").checked ? null : Science.turnBack(p, Suit.timeline(p, routeOpts(p))); // same plan as the 2D map: station work, rover legs
         if (tb !== null && tb < p.samples.length - 1) {
           const s = p.samples[tb];
           routeEnts.push(viewer.entities.add({ position: C.Cartesian3.fromDegrees(s.lon, s.lat),

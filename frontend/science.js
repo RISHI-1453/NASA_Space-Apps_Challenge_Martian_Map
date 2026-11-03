@@ -268,7 +268,7 @@ const Science = (() => {
     showTab("science");
     const card = document.getElementById(`ref-${id}`);
     if (!card) return;
-    card.scrollIntoView({ block: "center", behavior: "smooth" });
+    reveal(card, 40);
     card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash");
   }
 

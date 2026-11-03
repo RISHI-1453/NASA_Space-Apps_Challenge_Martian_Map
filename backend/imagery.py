@@ -21,7 +21,11 @@ from pathlib import Path
 
 import httpx
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFile
+
+# a few of the source's tiles are cut short at the source itself (the same bytes on every download):
+# decode the rows that are there rather than failing the whole tile — see _decode
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 TREK = "https://trek.nasa.gov/tiles/Mars/EQ/{layer}/1.0.0/default/default028mm/{{z}}/{{y}}/{{x}}.png"
 LAYERS = {
@@ -59,11 +63,17 @@ def _download(url: str) -> bytes:
             if r.status_code in (400, 404):
                 raise Missing
             r.raise_for_status()
-            Image.open(io.BytesIO(r.content)).verify()  # a cut-short download fails here
-            return r.content
-        except (httpx.TransportError, httpx.HTTPStatusError, OSError):
+        except (httpx.TransportError, httpx.HTTPStatusError):
             if attempt == 2:
                 raise
+            continue
+        try:
+            Image.open(io.BytesIO(r.content)).verify()  # a cut-short download fails here...
+            return r.content
+        except (OSError, SyntaxError):  # (PIL reports a bad PNG checksum as SyntaxError)
+            if attempt == 2:  # ...but the same bytes three times means the source tile itself is short:
+                Image.open(io.BytesIO(r.content))  # if it's an image at all, use the rows it has (_decode)
+                return r.content
 
 
 def _save(path: Path, data: bytes) -> None:
@@ -79,13 +89,55 @@ def _webp(img: Image.Image) -> bytes:
     return buf.getvalue()
 
 
+def _decode(data: bytes) -> tuple[Image.Image, bool]:
+    """A downloaded tile as an image, and whether it was broken. A truncated greyscale tile decodes
+    with its missing rows black; those rows become transparent (and a corrupt tile entirely so)."""
+    img = Image.open(io.BytesIO(data))
+    try:
+        img.load()
+    except (OSError, SyntaxError):  # corrupt, not just short (a bad checksum)
+        return Image.new("LA", img.size, (0, 0)), True
+    if img.mode != "L":
+        return img, False
+    a = np.asarray(img)
+    rows = np.flatnonzero(a.max(axis=1) > 0)
+    last = rows[-1] + 1 if rows.size else 0
+    if last == a.shape[0]:
+        return img, False
+    alpha = np.full(a.shape, 255, np.uint8)
+    alpha[last:] = 0
+    out = img.convert("LA")
+    out.putalpha(Image.fromarray(alpha, "L"))
+    return out, True
+
+
+def _patch(layer: str, z: int, x: int, y: int, img: Image.Image) -> Image.Image:
+    """Fill a broken tile's missing rows from the tile above it: the same ground at half the detail
+    (and whatever is still missing stays transparent, so the map underneath shows)."""
+    if z == 0:
+        return img
+    a = np.asarray(img)
+    hole = a[..., 1] == 0
+    try:
+        ppath, pimg = _grey(layer, z - 1, x // 2, y // 2)
+        parent = (pimg or Image.open(ppath)).convert("LA")
+    except Exception:
+        return img
+    s = parent.width // 2
+    quad = parent.crop(((x % 2) * s, (y % 2) * s, (x % 2 + 1) * s, (y % 2 + 1) * s)).resize(img.size, Image.Resampling.BILINEAR)
+    out = a.copy()
+    out[hole] = np.asarray(quad)[hole]
+    return Image.fromarray(out, "LA")
+
+
 def _grey(layer: str, z: int, x: int, y: int) -> tuple[Path, Image.Image | None]:
     """The original tile's cache file, downloading it first if needed (the image when just downloaded)."""
     path = CACHE / layer / f"{z}_{y}_{x}.webp"
     if path.exists():
         return path, None
-    img = Image.open(io.BytesIO(_download(LAYERS[layer].format(z=z, y=y, x=x))))
-    img.load()
+    img, broken = _decode(_download(LAYERS[layer].format(z=z, y=y, x=x)))
+    if broken:
+        img = _patch(layer, z, x, y, img)
     _save(path, _webp(img))
     return path, img
 

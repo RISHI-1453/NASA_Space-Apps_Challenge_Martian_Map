@@ -17,6 +17,7 @@ const Landmarks = (() => {
 
   function actions(p) {
     const box = document.createElement("div");
+    box.className = "pa-wrap";
     box.appendChild(Dir.actions([p.lat, p.lon], p.name, { close: () => map.closePopup() }));
     const more = document.createElement("div");
     more.className = "place-actions";

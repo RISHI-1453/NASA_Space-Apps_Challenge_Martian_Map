@@ -70,7 +70,11 @@ At the end, the Mars globe turns past famous places, then **unrolls into the fla
 - **Folded cards:** the research check and *Science along the way* open on demand and show a status badge.
 - **Live guidance:** the cards stack in a top dock and a bottom dock.
 - **The visor:** goes full screen, with all of its controls in one toolbar.
-- **Phones:** the visor and live guidance have their own layouts.
+- **Side panel:** opens on **Missions** the first time (ready-made science EVAs), then wherever you left off. Each mission card has its goal, length and work time, an *About this EVA* fold and one **Plan this EVA** button. The tabs work with ← / → too.
+- **Map pop-ups:** the main action (🧭 Directions to here) across the top, the rest two to a row.
+- **Phones:** like a maps app, the map stays pinned at the top and the panel scrolls up beneath it, so a route and its directions are on screen together. Buttons and fields are finger-sized, and the visor and live guidance have their own layouts.
+- **Keyboard and comfort:** a visible focus ring on every control, and animations switch off when the system asks for reduced motion.
+- **Sharing:** a favicon and a link-preview card (title, description and a 3D picture of the boxwork walk), so a shared link shows as a card.
 
 **Map layers (all NASA Mars Trek WMTS):** all in the **🗂 Layers** panel, grouped into *Base map*, *Science data*, *Close-up imagery* and *On the map*, each with a one-line note. When a science layer is on, what its colours mean appears under it and in the **ⓘ Legend** chip on the map.
 
@@ -167,6 +171,7 @@ The route summary shows the share of each supply the walk uses and names the **l
     - The same coloured tiles are used for the close-ups on the 2D map.
   - **Other choices:** the original greyscale, Viking colour only, or MOLA elevation colours.
   - **Small tiles:** the heavy layers come through `/api/imagery/…` (add `_c` for colour), re-encoded once as WebP and cached: about 8 KB per tile instead of 60–95 KB.
+  - **Broken source tiles:** a few of the CTX mosaic's tiles are cut short or corrupt at the source. Their missing rows are filled from the tile one zoom level up (the same ground at half the detail), so there are no black bands or holes.
 - **On the globe:**
   - Your route, draped on the terrain and coloured by slope, with its A/B/C pins.
   - The dashed 10 km walk-home ring and the ⟲ point of no return.
@@ -287,7 +292,7 @@ frontend/datalayers.js  science layers + legend, "What orbiters found here", "Sc
 frontend/spaceweather.js  space weather seen from Mars: facing/connected regions, Mars-bound CMEs, go/no-go
 frontend/checklist.js   the printable Apollo-style cuff checklist with a shaded-relief traverse map
 frontend/tour.js        the guided-tour video pop-up (after the intro, and the ▶ Tour button)
-frontend/media/         the tour video (martian-map-tour.mp4) and its poster
+frontend/media/         the tour video (martian-map-tour.mp4), its poster, and the link-preview image (og-image.jpg)
 data/                sites.json, landmarks.json (OrbitStudio), mars_features.json; MOLA grid + Jezero DTM and the
                      tile caches (downloaded, git-ignored)
 scripts/fetch_data.py      downloads the elevation data (MOLA, Jezero CTX DTM, Gale HiRISE DTM)
