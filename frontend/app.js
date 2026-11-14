@@ -81,6 +81,15 @@ const hiresLayers = {
   "Gale · CTX 6 m (greyscale)": trek("Gale_CTX_BlockAdj_dd", "png", 12, { bounds: GALE_CTX, minZoom: 8 }),
 };
 
+// a tile that fails because a source blipped gets one more try a moment later, instead of a blank square
+const retryTiles = (layer) => layer.on("tileerror", ({ tile }) => {
+  if (tile.dataset.retried || !tile.src) return;
+  tile.dataset.retried = "1";
+  const url = tile.src;
+  setTimeout(() => { tile.src = url + (url.includes("?") ? "&" : "?") + "retry=1"; }, 1500);
+});
+Object.values(hiresLayers).forEach(retryTiles);
+
 const graticule = L.layerGroup();
 for (let lat = -60; lat <= 60; lat += 30)
   L.polyline([[lat, -180], [lat, 180]], { color: "#fff", weight: 0.5, opacity: 0.25, interactive: false }).addTo(graticule);
