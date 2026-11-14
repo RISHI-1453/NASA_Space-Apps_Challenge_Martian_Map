@@ -2,6 +2,7 @@
 
 **Challenge:** Interplanetary Survival Guide: Martian Map (2026 NASA Space Apps, Intermediate)
 **Team:** Code Huzzlers
+**Live:** https://martianmap.us
 
 A layered, integrated map of the Martian surface that helps an astronaut plan and carry out a **Marswalk**.
 It pulls together data from many NASA missions:
@@ -41,6 +42,14 @@ python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
 .venv\Scripts\python scripts\fetch_data.py
 ```
+
+## Deploy
+
+The live site runs on Google Cloud Run, built from the `Dockerfile` (which downloads the elevation data into the image). From Google Cloud Shell, in a clone of this repo:
+```bash
+gcloud run deploy martian-map --source . --region us-central1 --allow-unauthenticated --cpu 2 --memory 2Gi --min-instances 1 --timeout 300
+```
+The custom domain is a Cloud Run domain mapping (`gcloud beta run domain-mappings create --service martian-map --domain martianmap.us --region us-central1`) with the A/AAAA records it prints added at the registrar. The link-preview card follows whatever address the page is served from. The same container also runs on any host that sets `$PORT`.
 
 ## Guided tour video
 
