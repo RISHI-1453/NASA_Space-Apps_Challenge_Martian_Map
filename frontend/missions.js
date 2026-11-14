@@ -25,7 +25,7 @@ const Missions = (() => {
       goal: "Did microbes once live in Jezero's river mud?",
       why: "In July 2024 Perseverance found a rock in Neretva Vallis, the river channel into Jezero, with millimetre 'leopard spots': pale rings with dark rims rich in iron phosphate and sulfide. On Earth, reactions like these are often driven by microbes. It's the strongest candidate biosignature yet — a person can survey the whole outcrop and choose the best spots to sample.",
       human: "Finding more of a millimetre-scale texture across a whole outcrop takes eyes, a hand lens and judgement.",
-      cites: ["hurowitz2025"], layers: ["minerals"], depart: "09:30", load: 15, round: true, rover: "none",
+      cites: ["hurowitz2025", "sun2020"], layers: ["jezgeo", "minerals"], depart: "09:30", load: 15, round: true, rover: "none",
       stops: [
         { lat: 18.4919, lon: 77.30104, name: "Neretva Vallis (Perseverance, sol 1230)", min: 10, task: "Suit check; photograph the channel floor and the light-toned outcrop upstream.", kit: "camera" },
         { lat: 18.493, lon: 77.30324, name: "Bright Angel outcrop (sol 1224)", min: 30, task: "Map where the pale Bright Angel rock meets the darker rock; sample both sides of the contact.", kit: "rock hammer, sample bags, hand lens" },
@@ -37,7 +37,7 @@ const Missions = (() => {
       goal: "Bring home the first rocks ever cached on another planet.",
       why: "Between December 2022 and January 2023 Perseverance left ten sealed sample tubes on the crater floor at Three Forks, as a backup cache for Mars Sample Return. A crew could walk over from the landing site, find each tube, check its seal and carry the set home.",
       human: "Handling ten tubes, checking seals and packing them takes minutes for a person and a whole campaign for robots.",
-      cites: ["depot2023"], layers: [], depart: "09:00", load: 12, round: true, rover: "none",
+      cites: ["depot2023", "sun2020"], layers: ["jezgeo"], depart: "09:00", load: 12, round: true, rover: "none",
       stops: [
         { lat: 18.4447, lon: 77.4508, name: "Octavia E. Butler Landing", min: 10, task: "Suit check; plot the tube positions from Perseverance's records.", kit: "tube map" },
         { lat: 18.45311, lon: 77.40859, name: "Three Forks depot, east end (sol 684)", min: 40, task: "Photograph each tube where it lies before touching it, check the seal, bag it in a sealed carrier.", kit: "sample carrier, gloves, camera" },

@@ -13,6 +13,36 @@ const DataLayers = (() => {
   const dust = trek("tes_ruffdust", "png", 2, { opacity: 0.6 });
   const geology = L.tileLayer("https://trek.nasa.gov/mars/trekarcgis/rest/services/SIM3292_Global_Geology/MapServer/WMTS/tile/1.0.0/SIM3292_Global_Geology/default/default028mm/{z}/{y}/{x}.png",
     { tileSize: 256, maxNativeZoom: 11, maxZoom: 18, noWrap: true, bounds: WORLD, opacity: 0.55, attribution: "USGS SIM 3292 (Tanaka et al. 2014) · Mars Trek" });
+  // the USGS 1:75,000 map of Jezero and Nili Planum (SIM 3464): drawn from its unit polygons, loaded on first use
+  const jezGeo = L.layerGroup();
+  let jezUnits = null, jezLoaded = null;
+  function buildJezero() {
+    if (jezLoaded) return jezLoaded;
+    jezLoaded = fetch("/api/science/jezero-geology").then((r) => r.json()).then((d) => {
+      jezUnits = d.units;
+      const canvas = L.canvas({ padding: 0.3 });
+      for (const [code, rings] of d.shapes) {
+        const u = d.units[code];
+        // all rings in one shape, filled even-odd: holes and multi-part units both come out right
+        L.polygon(rings.map((r) => r.map(([x, y]) => [y, x])), { renderer: canvas, color: u.colour, weight: 0.6, opacity: 0.9, fillColor: u.colour, fillOpacity: 0.42 })
+          .on("click", (e) => {
+            if (map.getContainer().style.cursor === "crosshair") return; // drawing, picking or tapping a fix: the click is theirs
+            L.popup({ maxWidth: 300 }).setLatLng(e.latlng).setContent(jezPopup(u, e.latlng)).openOn(map);
+          }).addTo(jezGeo);
+      }
+      legend(); layersControl.sync(); // the unit list for both legends is known now
+    }).catch(() => { jezLoaded = null; });
+    return jezLoaded;
+  }
+  function jezPopup(u, ll) {
+    const box = document.createElement("div");
+    box.className = "place-pop";
+    box.innerHTML = `<div class="pn"><i class="unit-sw" style="background:${u.colour}"></i>${u.name} (${u.symbol})</div>
+      <div class="pm">${u.description}<br><b>What it is:</b> ${u.interpretation}${u.notes ? `<br><b>Also:</b> ${u.notes}` : ""}
+      <br>USGS SIM 3464, Sun &amp; Stack 2020 (1:75,000)</div>`;
+    box.appendChild(Dir.actions([ll.lat, ll.lng], u.name, { close: () => map.closePopup() }));
+    return box;
+  }
   // ---------- points: minerals, salts, ice, active slopes ----------
   const minerals = L.layerGroup(), active = L.layerGroup();
   const renderer = L.canvas({ padding: 0.3 });
@@ -67,10 +97,11 @@ const DataLayers = (() => {
     fresh: "Formed in the last few decades; fresh rock, but loose blocks around the rim",
   };
   // ---------- what each science layer means: shown in the Layers panel and in the legend chip ----------
-  const key = (c, t, ring) => `<span class="dl-key"><i style="background:${ring ? "transparent" : c};border-color:${c}"></i>${t}</span>`;
+  const key = (c, t, ring, square) => `<span class="dl-key"><i${square ? ' class="sq"' : ""} style="background:${ring ? "transparent" : c};border-color:${c}"></i>${t}</span>`;
   const LEGEND = [
     [nightIR, "Night infrared", () => `<i>Bright</i>: rock and bedrock that stay warm at night (firm footing, sharp blocks). <i>Dark</i>: fine dust and sand (soft, slow going).`],
     [geology, "Geologic map", () => `Each colour is a rock unit. The unit and its age at any spot are in <i>Conditions → What orbiters found here</i>.`],
+    [jezGeo, "Jezero geologic map", () => jezUnits ? Object.values(jezUnits).map((u) => key(u.colour, `${u.symbol} ${u.name.replace(/ unit$/, "")}`, false, true)).join("") + `<br>Click a unit for its description.` : "Loading…"],
     [inertia, "Thermal inertia", () => `<span class="dl-ramp ti"></span> low: loose dust → high: rock, bedrock, ice`],
     [dust, "Dust cover", () => `<span class="dl-ramp dci"></span> thick dust (hides the rock, clogs joints) → dust-free`],
     [minerals, "Water-formed minerals", () => Object.values(MINERAL).map(([c, t]) => key(c, t)).join("") + key("#00d0ff", "hydrated (CRISM/OMEGA)") + key("#ffe14d", "salt deposit", true)],
@@ -79,11 +110,12 @@ const DataLayers = (() => {
   const legendOf = (layer) => LEGEND.find((l) => l[0] === layer)[2];
   layersControl.addBaseLayer(nightIR, "THEMIS night infrared", { note: "Mars Odyssey · 100 m · rock vs dust", legend: legendOf(nightIR) });
   layersControl.addOverlay(geology, "Geologic map", { group: "Science data", note: "USGS SIM 3292 · rock units and their ages", legend: legendOf(geology) });
+  layersControl.addOverlay(jezGeo, "Jezero geologic map (detailed)", { group: "Science data", note: "USGS SIM 3464 · 1:75,000 · 14 units in Jezero & Nili Planum", legend: legendOf(jezGeo) });
   layersControl.addOverlay(inertia, "Thermal inertia", { group: "Science data", note: "MGS TES · how firm the ground is", legend: legendOf(inertia) });
   layersControl.addOverlay(dust, "Dust cover", { group: "Science data", note: "MGS TES · where dust hides the rock", legend: legendOf(dust) });
   layersControl.addOverlay(minerals, "Water-formed minerals", { group: "Science data", note: "CRISM · OMEGA · THEMIS: clays, silica, salts…", legend: legendOf(minerals) });
   layersControl.addOverlay(active, "Ice & active slopes", { group: "Science data", note: "HiRISE: exposed ice, RSL keep-outs, gullies", legend: legendOf(active) });
-  map.on("layeradd", (e) => { if (e.layer === minerals || e.layer === active) build(); });
+  map.on("layeradd", (e) => { if (e.layer === minerals || e.layer === active) build(); if (e.layer === jezGeo) buildJezero(); });
   map.on("layeradd layerremove", (e) => { if (LEGEND.some((l) => l[0] === e.layer)) legend(); });
 
   // a small "Legend" chip on the map, closed until asked for; it only exists while a science layer is on
@@ -119,7 +151,9 @@ const DataLayers = (() => {
     if (hereKey !== key) return;
     const cite = Science.cite, rows = [];
     const row = (cls, ic, html) => rows.push(`<div class="sci-row ${cls}"><span class="sci-ic">${ic}</span><div>${html}</div></div>`);
-    if (d.geology) row("", "🪨", `Geologic unit <b>${d.geology.unit}</b>: ${d.geology.name}, ${d.geology.age_text}${cite("tanaka2014")}.`);
+    const g = d.geology;
+    if (g) row("", "🪨", `Geologic unit <b>${g.unit}</b>: ${g.name}, ${g.age_text}${cite(g.ref || "tanaka2014")}.` +
+      (g.interpretation ? ` ${g.interpretation} <span class="muted">(from the detailed ${g.scale} USGS map of Jezero, the <i>Jezero geologic map</i> layer)</span>` : ""));
     const mins = d.features.filter((f) => f.group === "mineral"), ice = d.features.filter((f) => f.group === "ice"),
       keep = d.features.filter((f) => f.group === "keepout"), unstable = d.features.filter((f) => f.group === "unstable");
     if (keep.length) row("warn", "⛔", `${keep[0].name} ${fmtKm(keep[0].km)} away: ${keep[0].what}${cite("rummel2014", "mcewen2014")}.`);
@@ -151,8 +185,10 @@ const DataLayers = (() => {
     const cite = Science.cite, rows = [];
     const row = (cls, ic, html) => rows.push(`<div class="sci-row ${cls}"><span class="sci-ic">${ic}</span><div>${html}</div></div>`);
     if (d.geology.length) {
-      const units = d.geology.map((g) => `<b>${g.unit}</b> (${g.name.replace(/ unit$/, "")}, ${g.age})`);
-      row("", "🪨", (d.geology.length === 1 ? `The whole walk is on one geologic unit: ${units[0]}` : `The walk crosses ${d.geology.length} geologic units: ${units.join(" → ")}. Unit contacts are where the story of an area is told — sample both sides`) + cite("tanaka2014") + ".");
+      const units = d.geology.map((g) => `<b>${g.unit}</b> (${g.name.replace(/ unit$/, "")}${g.age ? `, ${g.age}` : ""})`);
+      const refs = [...new Set(d.geology.map((g) => g.ref || "tanaka2014"))];
+      row("", "🪨", (d.geology.length === 1 ? `The whole walk is on one geologic unit: ${units[0]}` : `The walk crosses ${d.geology.length} geologic units: ${units.join(" → ")}. Unit contacts are where the story of an area is told — sample both sides`) + cite(...refs) + "." +
+        (refs.includes("sun2020") ? ` Mapped at 1:75,000 by USGS in Jezero: the <i>Jezero geologic map</i> layer shows where the contacts are.` : ""));
     }
     const legName = (i) => { const s = pts[i]; return s ? `${lastLabels[s.leg] || "A"}→${lastLabels[s.leg + 1] || "B"}` : ""; };
     const hits = d.features.filter((f) => f.group !== "fresh");
@@ -179,7 +215,7 @@ const DataLayers = (() => {
     }));
   }
 
-  return { here, along, layers: { nightIR, inertia, dust, geology, minerals, active }, build, show(names) {
+  return { here, along, layers: { nightIR, inertia, dust, geology, jezgeo: jezGeo, minerals, active }, build, show(names) {
     for (const n of names) { const l = DataLayers.layers[n]; if (l && !map.hasLayer(l)) { if (l === nightIR) map.eachLayer((x) => Object.values(baseLayers).includes(x) && map.removeLayer(x)); l.addTo(map); } }
   } };
 })();

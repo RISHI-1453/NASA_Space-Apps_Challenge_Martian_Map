@@ -6,7 +6,9 @@ scripts/build_science_layers.py), and the USGS global geologic map unit under an
   aqueous   water-formed minerals by class                                    Ehlmann & Edwards 2014
   chloride  chloride-salt deposits mapped with THEMIS (Mars Odyssey)          Osterloo et al. 2010
   active    HiRISE (MRO): new craters, ice-exposing craters, RSL, active gullies
-  geology   USGS SIM 3292 global geologic map (Tanaka et al. 2014), queried live from Mars Trek
+  geology   USGS SIM 3292 global geologic map (Tanaka et al. 2014), queried live from Mars Trek; inside
+            Jezero and Nili Planum, the 1:75,000 USGS SIM 3464 map (Sun & Stack 2020) instead
+            (data/jezero_geology.json, built by scripts/build_jezero_geology.py)
 """
 from __future__ import annotations
 
@@ -140,8 +142,67 @@ def _age(unit: str) -> str:
     return f"{periods[-1]} to {periods[0]}"  # e.g. "AH" = Amazonian and Hesperian: oldest last
 
 
+# --- USGS 1:75,000 geologic map of Jezero crater and Nili Planum (SIM 3464) ---------------------
+JEZERO = Path(__file__).resolve().parent.parent / "data" / "jezero_geology.json"
+_jez: dict | None = None
+
+
+def _load_jezero() -> dict:
+    """The map's unit polygons with their bounding boxes, for point lookups."""
+    global _jez
+    with _lock:
+        if _jez is None:
+            d = json.loads(JEZERO.read_text(encoding="utf-8")) if JEZERO.exists() else {"units": {}, "shapes": []}
+            rings = [[np.asarray(r, dtype=np.float64) for r in rs] for _, rs in d["shapes"]]
+            box = np.array([[min(r[:, 0].min() for r in rs), min(r[:, 1].min() for r in rs),
+                             max(r[:, 0].max() for r in rs), max(r[:, 1].max() for r in rs)] for rs in rings]) if rings else np.zeros((0, 4))
+            _jez = {"raw": d, "units": d["units"], "codes": [c for c, _ in d["shapes"]], "rings": rings, "box": box}
+        return _jez
+
+
+def jezero_geology() -> dict:
+    """The whole map, compact, for the map layer."""
+    return _load_jezero()["raw"]
+
+
+def _inside(rings: list[np.ndarray], x: float, y: float) -> bool:
+    """Even-odd test over all of a polygon's rings, so holes and multi-part units both work."""
+    hit = False
+    for r in rings:
+        x0, y0, x1, y1 = r[:-1, 0], r[:-1, 1], r[1:, 0], r[1:, 1]
+        cross = (y0 > y) != (y1 > y)
+        xs = x0 + (y - y0) * (x1 - x0) / np.where(y1 == y0, 1e-12, y1 - y0)
+        hit ^= bool(np.count_nonzero(cross & (x < xs)) % 2)
+    return hit
+
+
+SIM3464_AGES = {"N": ("Noachian", "more than 3.7 billion years old"),
+                "NH": ("Late Noachian to Early Hesperian", "about 3.7 billion years old"),
+                "H": ("Hesperian", "about 3.7–3.0 billion years old"),
+                "A": ("Amazonian", "younger than about 3 billion years")}
+
+
+def jezero_unit(lat: float, lon: float) -> dict | None:
+    """The SIM 3464 unit at a point, or None outside the map."""
+    j = _load_jezero()
+    b = j["box"]
+    if not len(b):
+        return None
+    for i in np.flatnonzero((b[:, 0] <= lon) & (lon <= b[:, 2]) & (b[:, 1] <= lat) & (lat <= b[:, 3])):
+        if _inside(j["rings"][i], lon, lat):
+            u = j["units"][j["codes"][i]]
+            m = re.match(r"^([NHA]+)", u["symbol"])  # the age letters lead the symbol, oldest first; crater units have none
+            age, text = SIM3464_AGES.get(m.group(1) if m else "", ("", "age not assigned on the map"))
+            return {"unit": u["symbol"], "name": u["name"], "age": age, "age_text": text,
+                    "interpretation": u["interpretation"], "notes": u["notes"], "ref": "sun2020", "scale": "1:75,000"}
+    return None
+
+
 def geology(lat: float, lon: float) -> dict | None:
-    """The geologic unit at a point: code, description and age."""
+    """The geologic unit at a point: code, description and age (the detailed Jezero map where it exists)."""
+    local = jezero_unit(lat, lon)
+    if local:
+        return local
     key = (round(lat, 2), round(lon, 2))  # ~600 m: far finer than the map's 1:20M scale
     if key in _geo_cache:
         return _geo_cache[key]
@@ -159,7 +220,7 @@ def geology(lat: float, lon: float) -> dict | None:
             text = f"formed around the {older}–{younger} boundary, " + ("about 3.7 billion years ago" if older == "Noachian" else "about 3 billion years ago")
         else:
             text = AGES.get(next((p for p in AGES if age.endswith(p)), ""), "")
-        out = {"unit": a["Unit"], "name": a["UnitDesc"], "age": age, "age_text": text}
+        out = {"unit": a["Unit"], "name": a["UnitDesc"], "age": age, "age_text": text, "ref": "tanaka2014", "scale": "1:20,000,000"}
     _geo_cache[key] = out
     return out
 
@@ -168,6 +229,8 @@ def geology_along(points: list[tuple[float, float]], n: int = 10) -> list[dict]:
     """Geologic units a route crosses, in order, with the route index where each starts."""
     if not points:
         return []
+    if any(jezero_unit(*points[i]) for i in (0, len(points) - 1)):
+        n = max(n, 60)  # the detailed Jezero map is a local lookup, and its units are small: sample densely
     idx = sorted({round(i * (len(points) - 1) / max(1, n - 1)) for i in range(n)})
     with ThreadPoolExecutor(6) as ex:
         units = list(ex.map(lambda i: _safe_geology(*points[i]), idx))

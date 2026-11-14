@@ -192,6 +192,13 @@ def science_features():
                     headers={"Cache-Control": "public, max-age=86400"})
 
 
+@app.get("/api/science/jezero-geology")
+def science_jezero_geology():
+    """The USGS 1:75,000 geologic map of Jezero and Nili Planum (SIM 3464): unit polygons and descriptions."""
+    return Response(json.dumps(sciencedata.jezero_geology(), separators=(",", ":"), ensure_ascii=False),
+                    media_type="application/json", headers={"Cache-Control": "public, max-age=86400"})
+
+
 @app.get("/api/science/near")
 def science_near(lat: float, lon: float, km: float = 25):
     """What orbiters found near a point, plus the geologic unit under it."""

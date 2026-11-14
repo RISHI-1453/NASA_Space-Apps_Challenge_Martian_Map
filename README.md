@@ -98,6 +98,7 @@ At the end, the Mars globe turns past famous places, then **unrolls into the fla
 | **CTX Gale mosaic** (overlay) | 6 m/px | MRO |
 | **HiRISE Gale mosaic**: Curiosity's traverse (overlay) | 25 cm/px | MRO |
 | **USGS global geologic map, SIM 3292** (overlay) | 1:20M | USGS / NASA PGM program |
+| **USGS Jezero crater & Nili Planum geologic map, SIM 3464** (overlay): 1,308 unit polygons in 14 units (the delta fans, crater floor, etched layers, Nili Planum plains), each with its USGS description and interpretation; click a unit to read it | 1:75,000 | USGS / NASA PGM program (Sun & Stack 2020) |
 | **TES thermal inertia** (overlay): loose dust vs rock, bedrock, ice | ~3 km/px | Mars Global Surveyor |
 | **TES dust cover index** (overlay) | ~3.5 km/px | Mars Global Surveyor |
 | **Water-formed minerals** (points): 1,642 CRISM/OMEGA hydrous detections, 2,417 clays/silica/sulfates/chlorides/carbonates, 642 THEMIS chloride deposits | | MRO, Mars Express, Mars Odyssey |
@@ -253,7 +254,7 @@ The route summary shows the share of each supply the walk uses and names the **l
 
 **Mars clock:** Mars Sol Date, MTC, Ls (season), Mars Year; local true solar time, sun elevation and daylight window at the destination, using the Mars24 algorithm (`frontend/marstime.js`). Also shows the live **signal delay to Earth** (JPL orbital elements), with a warning near solar conjunction.
 
-**Research-backed (Science tab):** 58 peer-reviewed, NASA and USGS sources, gathered with a SciSpace literature search and from the datasets themselves. Each figure the app shows carries a small numbered link to its source. The Science tab lists every source with what it found and where the app uses it (`frontend/science.js`).
+**Research-backed (Science tab):** 59 peer-reviewed, NASA and USGS sources, gathered with a SciSpace literature search and from the datasets themselves. Each figure the app shows carries a small numbered link to its source. The Science tab lists every source with what it found and where the app uses it (`frontend/science.js`).
 - **Route research check**, under every route summary:
   - **Effort vs Apollo:** average power against the 229–352 W Apollo average. Peaks are flagged above the Apollo/Skylab maximum (581 W) or the Walkback-Test pace that overwhelmed suit cooling (≈ 700 W).
   - **Radiation dose for the walk:** 0.64 mSv/day measured by Curiosity's RAD, up to 50% more near solar minimum. Includes an altitude note (thinner air on high ground means more dose) and context: Earth background, the ~660 mSv trip to Mars, and NASA's 600 mSv career limit.
@@ -278,7 +279,7 @@ backend/app.py       FastAPI: /api/sites, /api/landmarks, /api/places, /api/wher
                      /api/rover/track, /api/terrain/tile/{z}/{x}/{y}, /api/terrain/area, /api/imagery/{layer}/{z}/{y}/{x},
                      /api/features, /api/science/features, /api/science/near, /api/science/along, /api/spaceweather
 backend/pathfind.py  A* walking routes around ground steeper than 15°, straightened where the ground allows
-backend/sciencedata.py  mineral, salt, ice and active-slope detections near a point or a route; USGS geologic unit (live)
+backend/sciencedata.py  mineral, salt, ice and active-slope detections near a point or a route; USGS geologic unit (1:75k SIM 3464 in Jezero, else SIM 3292 live)
 backend/spaceweather.py NASA DONKI + NOAA SWPC, fetched in parallel, cached 15 min, a down source skipped
 backend/places.py    IAU place-name search + "where am I" descriptions
 backend/globaldem.py 200 m global DEM as cached LERC tiles (USGS HRSC/MOLA blend, hosted by Esri)
@@ -290,7 +291,7 @@ frontend/intro.js    3D opener (galaxy → solar system → Mars → globe unrol
 frontend/score.js    the intro's synthesised soundtrack (Web Audio)
 frontend/directions.js  From → stops → To planner, search, choose-on-map, popup actions
 frontend/suit.js     astronaut & suit readings, metabolic/consumables model
-frontend/science.js  the 58 cited sources, route research check (incl. space weather + shelter time), walk-back, hazard notes
+frontend/science.js  the 59 cited sources, route research check (incl. space weather + shelter time), walk-back, hazard notes
 frontend/groundview.js  rover photos look-around (hands 3D over to globe.js)
 frontend/globe.js    the 3D Mars globe (CesiumJS): streaming terrain + imagery, route, sites, names, rover tracks, fly-along
 frontend/navigate.js live guidance: route snapping, off-route, next turn, O2/turn-back
@@ -306,6 +307,7 @@ data/                sites.json, landmarks.json (OrbitStudio), mars_features.jso
                      tile caches (downloaded, git-ignored)
 scripts/fetch_data.py      downloads the elevation data (MOLA, Jezero CTX DTM, Gale HiRISE DTM)
 scripts/build_science_layers.py  rebuilds data/science_features.json from Mars Trek's feature services
+scripts/build_jezero_geology.py  rebuilds data/jezero_geology.json from the USGS PGM SIM 3464 feature service
 scripts/tour/              records the guided-tour video (record.py drives the app, overlay.js draws the captions)
 scripts/build_features.py  rebuilds data/mars_features.json from the USGS gazetteer
 scripts/build_textures.py  rebuilds the intro's Earth/Mars globe textures (needs Pillow)
