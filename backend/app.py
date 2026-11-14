@@ -6,9 +6,9 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import Response
+from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -217,6 +217,16 @@ def science_along(body: Points):
 def space_weather():
     """Solar flares, particle events and Mars-bound CMEs (NASA DONKI) with NOAA SWPC's GOES data."""
     return spaceweather.status()
+
+
+@app.get("/", include_in_schema=False)
+def index(request: Request):
+    """The app page, with its link-preview card pointing at whatever address it is served from
+    (social sites need absolute URLs, and the host can be a cloud URL or a custom domain)."""
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme).split(",")[0]
+    origin = f"{proto}://{request.headers.get('host', request.url.netloc)}"
+    page = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
+    return HTMLResponse(page.replace("https://martian-map.origin", origin), headers={"Cache-Control": "no-cache"})
 
 
 class Frontend(StaticFiles):

@@ -1,4 +1,5 @@
-# Martian Map on a Hugging Face Space (Docker): the FastAPI server and the web app together, on port 7860.
+# Martian Map in one container: the FastAPI server and the web app together. Listens on $PORT
+# (Google Cloud Run and Azure Container Apps set it), else 7860.
 FROM python:3.12-slim
 
 # Spaces run the container as user 1000, and the app writes its tile caches under data/
@@ -15,4 +16,4 @@ COPY --chown=user . .
 RUN python scripts/fetch_data.py
 
 EXPOSE 7860
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860", "--app-dir", "backend"]
+CMD uvicorn app:app --host 0.0.0.0 --port ${PORT:-7860} --app-dir backend --proxy-headers --forwarded-allow-ips "*"
