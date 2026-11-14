@@ -1,8 +1,9 @@
 # Martian Map — Interplanetary Survival Guide
 
 **Challenge:** Interplanetary Survival Guide: Martian Map (2026 NASA Space Apps, Intermediate)
-**Team:** Code Huzzlers
+**Team:** Code Huzzlers (Rishi)
 **Live:** https://martianmap.us
+**30-second demo:** [`frontend/media/martian-map-demo-30s.mp4`](frontend/media/martian-map-demo-30s.mp4)
 
 A layered, integrated map of the Martian surface that helps an astronaut plan and carry out a **Marswalk**.
 It pulls together data from many NASA missions:
@@ -10,7 +11,7 @@ It pulls together data from many NASA missions:
 - **Thermal:** Mars Odyssey THEMIS and MGS TES.
 - **Spectral:** MRO CRISM and Mars Express OMEGA.
 - **Topographic:** MOLA, HRSC, and the CTX and HiRISE DTMs.
-- **Geologic:** the USGS global map.
+- **Geologic:** the USGS global map, and the USGS 1:75,000 map of Jezero.
 - **Radiation and space weather:** Curiosity RAD, NASA DONKI and NOAA GOES.
 - **Surface views:** Perseverance and Curiosity rover photos.
 
@@ -50,6 +51,17 @@ The live site runs on Google Cloud Run, built from the `Dockerfile` (which downl
 gcloud run deploy martian-map --source . --region us-central1 --allow-unauthenticated --cpu 2 --memory 2Gi --min-instances 1 --timeout 300
 ```
 The custom domain is a Cloud Run domain mapping (`gcloud beta run domain-mappings create --service martian-map --domain martianmap.us --region us-central1`) with the A/AAAA records it prints added at the registrar. The link-preview card follows whatever address the page is served from. The same container also runs on any host that sets `$PORT`.
+
+## Use of AI (Super Intelligence) tools
+
+As the NASA Space Apps rules ask, here is where AI was used:
+- **Code:** written with help from Claude (Anthropic), an AI coding assistant, working from Rishi's direction on what to build, which data to use and how it should behave. Rishi tested and reviewed the app throughout.
+- **Audio:** the intro's soundtrack (`frontend/score.js`) is synthesised live by that AI-assisted code; there are no recorded or AI-generated audio files.
+- **Video:** the guided tour and the 30-second demo are screen recordings of the real site, captioned and assembled by AI-assisted scripts (`scripts/tour/`). The demo's end card says so, and both files carry it in their metadata.
+- **Data and images:** none are AI-generated. Every map, photo and number comes from the NASA, ESA and USGS data and the published studies listed in the app's Science tab. (Greyscale CTX/HiRISE close-ups are coloured with Viking's colour of the same ground by a plain image-processing step, described under *3D view*.)
+- **No NASA branding** (logos, insignia) is used or modified anywhere in the project.
+
+The same note is in the app, at the end of the **Science** tab.
 
 ## Guided tour video
 
