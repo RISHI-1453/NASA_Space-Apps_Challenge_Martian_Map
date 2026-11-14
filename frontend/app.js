@@ -232,6 +232,21 @@ fetch("/api/sites").then((r) => r.json()).then(({ sites }) => {
   followCentre();
 });
 
+// ---------- the rovers' real traverses (NASA MMGIS) and where each one is today ----------
+const roverLayer = L.layerGroup().addTo(map);
+layersControl.addOverlay(roverLayer, "Rover traverses", { note: "Perseverance's and Curiosity's actual paths, and where each is today" });
+for (const m of ["m2020", "msl"]) {
+  fetch(`/api/rover/track?mission=${m}`).then((r) => (r.ok ? r.json() : null)).then((t) => {
+    if (!t) return;
+    L.polyline(t.points, { color: "#5ec4d6", weight: 2.5, opacity: 0.85, dashArray: "5 4", interactive: false }).addTo(roverLayer);
+    const { lat, lon, sol } = t.latest;
+    L.circleMarker([lat, lon], { radius: 6, color: "#fff", weight: 2, fillColor: "#5ec4d6", fillOpacity: 1 })
+      .bindTooltip(`${t.rover} today (sol ${sol})`, { direction: "top" })
+      .on("click", () => GroundView.at(lat, lon, `${t.rover} today (sol ${sol})`))
+      .addTo(roverLayer);
+  }).catch(() => {});
+}
+
 // ---------- cursor readout ----------
 let readoutTimer;
 map.on("mousemove", (e) => {

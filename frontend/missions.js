@@ -12,6 +12,9 @@ const Missions = (() => {
       human: "Reading the 3D pattern of ridges on the spot and choosing samples by eye is exactly what rovers are slow at.",
       cites: ["msl2025", "tanaka2014"], layers: ["geology"], depart: "09:00", load: 18, round: false, rover: "pressurized",
       note: "One way: the pressurised rover drops the crew at A and picks them up at E.",
+      figure: { src: "https://assets.science.nasa.gov/content/dam/science/psd/mars/resources/detail_files/2/22472_PIA23179-combo-rev_main.gif",
+        link: "https://science.nasa.gov/resource/curiositys-proposed-path-up-mount-sharp/",
+        caption: "NASA's 2019 proposed route for Curiosity up Mount Sharp (PIA23179), with the regions scientists wanted to explore. Curiosity has since driven much of it: its real path is the dashed cyan line on the map." },
       stops: [
         { lat: -4.79689, lon: 137.38772, name: "Boxwork margin (Curiosity, sol 4526)", min: 15, task: "Panorama of the ridge network ahead from the high ground; set up the radio relay.", kit: "camera, radio relay" },
         { lat: -4.80191, lon: 137.38211, name: "Boxwork ridge (sol 4575)", min: 35, task: "Follow one ridge along its length. Sample the hard ridge-crest cement and the softer bedrock beside it.", kit: "rock hammer, chisel, sample bags, hand lens" },
@@ -114,6 +117,8 @@ const Missions = (() => {
           <p class="mi-human"><b>Why send people:</b> ${m.human}</p>
           <ol class="mi-stops">${m.stops.map((s) => `<li><b>${s.name}</b> · ${s.min} min — ${s.task}</li>`).join("")}</ol>
           ${m.note ? `<p class="muted small">${m.note}</p>` : ""}
+          ${m.figure ? `<figure class="mi-fig"><img src="${m.figure.src}" loading="lazy" alt="${m.figure.caption}">
+            <figcaption>${m.figure.caption} <a href="${m.figure.link}" target="_blank" rel="noopener">NASA page</a></figcaption></figure>` : ""}
         </div>
       </article>`).join("");
     el.querySelectorAll(".mi-plan").forEach((b) => (b.onclick = () => plan(LIST[+b.dataset.i])));

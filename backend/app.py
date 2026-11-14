@@ -105,12 +105,16 @@ def rover_nearest(lat: float, lon: float, max_km: float = 3.0):
 
 
 @app.get("/api/rover/photos")
-def rover_photos(mission: str, sol: int, site: int | None = None, drive: int | None = None):
-    """Rover photos (Navcam) taken on a sol, preferring frames from the given stop."""
+def rover_photos(mission: str, sol: int, site: int | None = None, drive: int | None = None, kind: str = "nav",
+                 sol_end: int | None = None):
+    """Rover photos from a stop, preferring frames taken right there: kind "nav" (Navcam look-around),
+    "colour" (Mastcam-Z / Mastcam) or "closeup" (WATSON / MAHLI, over every sol the rover stayed)."""
     if mission not in rover.MISSIONS:
         raise HTTPException(400, "mission must be m2020 or msl")
+    if kind not in ("nav", "colour", "closeup"):
+        raise HTTPException(400, "kind must be nav, colour or closeup")
     try:
-        return rover.photos(mission, sol, site, drive)
+        return rover.photos(mission, sol, site, drive, kind, sol_end)
     except Exception as e:
         raise HTTPException(502, f"NASA raw-image service unavailable: {e}")
 

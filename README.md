@@ -27,7 +27,7 @@ You choose a science goal, draw a route that steers around steep ground, and see
 | Suits and equipment limit mobility | Pandolf effort model with carried kit; oxygen, CO₂ scrubber, cooling water and battery for **both** suits of a buddy pair; station work time; load vs body-mass limit |
 | A route that avoids obstacles such as large rock formations | **Walk around steep ground**: an A* search on the 20 m or 200 m terrain routes each leg around ground steeper than 15°. Rocky vs dusty ground is shown by the THEMIS night IR and TES thermal inertia layers |
 | Habitat display, tablet, or helmet HUD | The planner (habitat), live guidance (tablet) and the **🪖 Visor HUD**: compass tape, suit gauges, EVA clock, dose, space weather |
-| Point-of-view images | **Ground view**: rover Navcam frames around 360° at the nearest Perseverance or Curiosity stop, plus the 3D globe |
+| Point-of-view images | **Ground view**: at the nearest Perseverance or Curiosity stop, Navcam frames laid out around 360°, the colour mast camera (Mastcam-Z / Mastcam) and the arm's close-ups (WATSON / MAHLI, e.g. the Cheyava Falls leopard spots), plus the 3D globe |
 | Rovers to carry crew and tools, astronauts in pairs | **Crew** tab: buddy pair (EV2's suit readings) and rover support. Any leg can be **🚙 driven**; the pressurised rover counts as shelter |
 | Inspiration from other missions' maps | Apollo-style **📋 cuff checklist** with a shaded-relief traverse map and turn-back rules per station, and **🖨 3D-printed relief models** like the ones Apollo crews trained with |
 
@@ -112,7 +112,9 @@ The point layers come from NASA Mars Trek's feature services, compacted by `scri
 - **USGS HRSC/MOLA blended DEM, 200 m/px, everywhere on Mars.** `backend/globaldem.py` streams it as 513×513 LERC elevation tiles from Esri's public hosting of the same USGS product. One ~250 KB tile covers 1.4° (about 83 km), so a whole neighbourhood arrives in a single request. Spot checks against the USGS GeoTIFF agree to about 1 m. Tiles are cached on disk (`data/esri_dem/`) and in memory, so each area downloads once; if the service is unreachable the app falls back to MOLA.
 - MGS MOLA MEGDR, about 3.7 km/px, as the offline fallback.
 
-**Science EVAs (Missions tab):** ready-made Marswalks with a science goal, at places rovers and orbiters have studied closely. Stations are real rover positions (NASA MMGIS traverse data) or mapped detections.
+**Rover traverses on the map:** Perseverance's and Curiosity's real paths (NASA MMGIS) as a dashed line, with a dot where each is today; click the dot for its latest photos.
+
+**Science EVAs (Missions tab):** ready-made Marswalks with a science goal, at places rovers and orbiters have studied closely. Stations are real rover positions (NASA MMGIS traverse data) or mapped detections. The Mount Sharp boxwork EVA shows NASA's 2019 proposed route for Curiosity (PIA23179, a challenge resource) next to the path it actually drove.
 - **The boxwork of Mount Sharp** (Gale, Curiosity 2025): 5 stations from ridge to hollow. It is one way, with a pressurised-rover pickup.
 - **Leopard spots at Cheyava Falls** (Jezero, Perseverance 2024): the potential biosignature.
 - **Collect the Three Forks samples** (Jezero): the 10 cached tubes.
@@ -218,7 +220,11 @@ The route summary shows the share of each supply the walk uses and names the **l
 **Landmarks of Mars (Sites tab and map ◆):** 45 places: volcanoes, the Valles Marineris canyons, craters, channels, plains and basins, both polar caps, and every landing site. Each has a description, MOLA elevation, distance from you, and *Fly there*, *Directions*, *🌐 3D* and *🖨 Print model*. The list is filterable, and the map layer toggles in the layers control. The list and descriptions come from OrbitStudio's Mars travel list (collected with the OrbitStudio connector into `data/landmarks.json`, served by `/api/landmarks`).
 
 **Ground view (Street View for Mars):**
-- **Rover photos:** finds the nearest Perseverance or Curiosity stop within 3 km (from NASA's MMGIS rover-traverse data). It lays out that stop's Navcam frames around 360° by the mast azimuth and elevation recorded with each frame (NASA raw-image APIs). Drag to look around, scroll to zoom, and click a frame for full size. This covers Jezero (Perseverance) and Gale (Curiosity).
+- **Rover photos** (NASA raw-image APIs, the challenge's *Perseverance Raw Images* resource): finds the nearest Perseverance or Curiosity stop within 3 km (from NASA's MMGIS rover-traverse data). Three tabs:
+  - **Look around:** that stop's Navcam frames laid out around 360° by the mast azimuth and elevation recorded with each frame. Drag to look around, scroll to zoom, click a frame for full size.
+  - **Colour:** the mast's colour camera (Mastcam-Z on Perseverance, Mastcam on Curiosity).
+  - **Close-ups:** the arm's hand-lens camera (WATSON, MAHLI) over every sol the rover stayed at that spot (short bumps within 50 m count as staying), so at Cheyava Falls you see the leopard-spot rock itself.
+  This covers Jezero (Perseverance) and Gale (Curiosity).
 - **🌐 3D view:** opens the same spot on the 3D globe.
 
 **Your position (no GPS on Mars):**
@@ -284,7 +290,7 @@ backend/spaceweather.py NASA DONKI + NOAA SWPC, fetched in parallel, cached 15 m
 backend/places.py    IAU place-name search + "where am I" descriptions
 backend/globaldem.py 200 m global DEM as cached LERC tiles (USGS HRSC/MOLA blend, hosted by Esri)
 backend/imagery.py   the sharpest imagery layers for the 3D view, re-encoded once as small WebP tiles
-backend/rover.py     nearest rover stop + its Navcam photos (NASA MMGIS + raw-image APIs, cached)
+backend/rover.py     nearest rover stop + its Navcam, colour and close-up photos (NASA MMGIS + raw-image APIs, cached)
 backend/terrain.py   DEM sampling (local DTMs -> MOLA), great-circle densify, legs/directions, slope/EVA model
 frontend/            Leaflet (EPSG:4326 + Trek tiles), Chart.js profile (loaded on first route), Mars clock
 frontend/intro.js    3D opener (galaxy → solar system → Mars → globe unrolls into the map); textures in frontend/textures/

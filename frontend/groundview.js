@@ -1,6 +1,9 @@
 // Ground view — "Street View" for Mars.
-//  • Rover photos: the nearest Perseverance/Curiosity stop's Navcam frames, laid out around 360°
+//  • Look around: the nearest Perseverance/Curiosity stop's Navcam frames, laid out around 360°
 //    by the direction the camera pointed (NASA raw-image metadata). Drag to look around.
+//  • Colour: the mast camera's colour frames from that stop (Mastcam-Z / Mastcam).
+//  • Close-ups: the arm's camera (WATSON / MAHLI) over every sol the rover stayed: rock textures
+//    at hand-lens scale, like the leopard spots at Cheyava Falls.
 //  • 3D view: hands over to the 3D globe (globe.js), opened on this spot.
 const GroundView = (() => {
   let root = null, body = null, kill = [], current = null;
@@ -40,6 +43,7 @@ const GroundView = (() => {
   function setSub(text) { if (root) root.querySelector(".gv-sub").textContent = text; }
   function selectTab(key) {
     stopScene();
+    current.kind = { photos: "nav", colour: "colour", closeup: "closeup" }[key]; // a late answer for another tab is dropped
     root.querySelectorAll(".gv-tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.key === key)));
     current.tabs.find((t) => t.key === key)?.run();
   }
@@ -61,7 +65,9 @@ const GroundView = (() => {
   async function at(lat, lon, name = "This spot") {
     const in3d = () => { close(); Globe.open({ lat, lon, name }); };
     open(name, `${fmtLatLon(lat, lon)}`, [
-      { key: "photos", label: "Rover photos", run: () => photos(lat, lon) },
+      { key: "photos", label: "Look around", run: () => photos(lat, lon, "nav") },
+      { key: "colour", label: "Colour", run: () => photos(lat, lon, "colour") },
+      { key: "closeup", label: "Close-ups", run: () => photos(lat, lon, "closeup") },
       { key: "3d", label: "🌐 3D view", run: in3d },
     ]);
     loading("Looking for the nearest rover stop…");
@@ -72,14 +78,20 @@ const GroundView = (() => {
     else in3d();
   }
 
-  // ---------- rover photos: a look-around strip ----------
-  async function photos(lat, lon) {
+  // what each tab shows, in words, for each rover
+  const KIND = {
+    nav: { m2020: "Navcam", msl: "Navcam", what: "frames" },
+    colour: { m2020: "Mastcam-Z colour", msl: "Mastcam colour", what: "frames" },
+    closeup: { m2020: "WATSON close-up", msl: "MAHLI close-up", what: "images" },
+  };
+  // ---------- rover photos ----------
+  async function photos(lat, lon, kind = "nav") {
     loading("Finding photos from the nearest rover stop…");
     let near, d;
     try {
       near = await (await fetch(`/api/rover/nearest?lat=${lat}&lon=${lon}&max_km=3`)).json();
       if (near) {
-        const r = await fetch(`/api/rover/photos?mission=${near.mission}&sol=${near.sol}&site=${near.site}&drive=${near.drive}`);
+        const r = await fetch(`/api/rover/photos?mission=${near.mission}&sol=${near.sol}&site=${near.site}&drive=${near.drive}&kind=${kind}&sol_end=${near.sol_end ?? near.sol}`);
         if (!r.ok) throw new Error((await r.json()).detail);
         d = await r.json();
       }
@@ -87,16 +99,23 @@ const GroundView = (() => {
       if (body) body.innerHTML = `<div class="gv-msg">NASA's raw-image service didn't answer (${e.message || e}). Try again in a moment, or switch to the 3D view.</div>`;
       return;
     }
-    if (!body) return;
+    if (!body || current.kind !== kind) return; // closed, or another tab was chosen meanwhile
     if (!near) {
       body.innerHTML = `<div class="gv-msg">No rover has driven within 3 km of here.<br>Perseverance explores Jezero crater and Curiosity explores Gale crater.
         <button type="button" class="gv-alt">See this spot in 3D</button></div>`;
       body.querySelector(".gv-alt").onclick = () => selectTab("3d");
       return;
     }
-    const pics = d.photos.filter((p) => p.medium);
-    setSub(`${d.rover}, sol ${d.sol} — rover stop ${fmtKm(near.dist_m / 1000)} from here · ${pics.length} Navcam frames${d.exact_stop ? "" : " from that sol"}`);
-    if (!pics.length) { body.innerHTML = `<div class="gv-msg">${d.rover} took no Navcam frames on sol ${d.sol}.</div>`; return; }
+    const pics = d.photos.filter((p) => p.medium), cam = KIND[kind][d.mission];
+    const sols = d.sol_end > d.sol ? `sols ${d.sol}–${d.sol_end}` : `sol ${d.sol}`;
+    setSub(`${d.rover}, ${sols} — rover stop ${fmtKm(near.dist_m / 1000)} from here · ${pics.length} ${cam} ${KIND[kind].what}${d.exact_stop ? "" : kind === "nav" ? " from that sol" : " from its stay"}`);
+    if (!pics.length) {
+      body.innerHTML = kind === "closeup"
+        ? `<div class="gv-msg">${d.rover} used its arm camera at only some stops, and not at this one (${sols}).<br>Try <b>Colour</b>, or a science stop like Cheyava Falls.</div>`
+        : `<div class="gv-msg">${d.rover} took no ${cam} ${KIND[kind].what} at this stop (${sols}).</div>`;
+      return;
+    }
+    if (kind !== "nav") return gallery(pics, d, kind);
 
     // ground-looking frames first, horizon views last so they sit on top (that's what you navigate by)
     const placed = pics.filter((p) => p.az !== null && p.el !== null).sort((a, b) => a.el - b.el);
@@ -148,12 +167,13 @@ const GroundView = (() => {
     kill.push(() => ro.disconnect());
     layout();
   }
-  function gallery(pics, d) {
+  function gallery(pics, d, kind = "nav") {
     body.innerHTML = `<div class="gv-gallery"></div>`;
     const g = body.querySelector(".gv-gallery");
     for (const p of pics) {
       const img = document.createElement("img");
-      img.src = p.medium; img.loading = "lazy"; img.alt = `${d.rover} ${p.camera}`;
+      img.src = kind === "colour" && p.small ? p.small : p.medium; img.loading = "lazy";
+      img.alt = `${d.rover} ${p.camera}${p.sol ? `, sol ${p.sol}` : ""}`;
       img.onclick = () => lightbox(p, d);
       g.appendChild(img);
     }
@@ -162,7 +182,7 @@ const GroundView = (() => {
     const lb = document.createElement("div");
     lb.className = "gv-lightbox";
     lb.innerHTML = `<img src="${p.large}" alt="${d.rover} ${p.camera}">
-      <div class="gv-cap">${d.rover} ${p.camera.replace(/_/g, " ").toLowerCase()} · sol ${d.sol}${p.az !== null ? ` · azimuth ${Math.round(p.az)}°, elevation ${Math.round(p.el)}°` : ""} · ${p.time ? p.time.slice(0, 16).replace("T", " ") + " UTC" : ""}
+      <div class="gv-cap">${d.rover} ${p.camera.replace(/_/g, " ").toLowerCase()} · sol ${p.sol ?? d.sol}${p.az !== null ? ` · azimuth ${Math.round(p.az)}°, elevation ${Math.round(p.el)}°` : ""} · ${p.time ? p.time.slice(0, 16).replace("T", " ") + " UTC" : ""}
       · <a href="${p.large}" target="_blank" rel="noopener">open full size</a> · NASA/JPL-Caltech</div>
       <button type="button" class="gv-close" aria-label="Close photo">✕</button>`;
     const shut = () => lb.remove();
